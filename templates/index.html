@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17243a">
+  <meta name="description" content="An interactive computer networks presentation and Python-powered teaching simulator for commands, protocols, LAN setup, servers, and routing.">
+  <title>NetLab — Computer Networks Interactive Lab</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#home" data-view="home" aria-label="NetLab home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="6" r="3.4"/><circle cx="6" cy="25" r="3.4"/><circle cx="26" cy="25" r="3.4"/><path d="M14.2 9 7.8 21.8M17.8 9l6.4 12.8M9.5 25h13"/></svg>
+        </span>
+        <span><strong>NetLab</strong><small>COMPUTER NETWORKS</small></span>
+      </a>
+      <div class="side-label">WORKSPACE</div>
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="home"><span class="nav-icon">⌂</span><span>Overview</span></button>
+        <button class="nav-item" data-view="commands"><span class="nav-icon">›_</span><span>Network commands</span><span class="nav-count">09</span></button>
+        <button class="nav-item" data-view="protocols"><span class="nav-icon">◈</span><span>Protocols</span></button>
+        <button class="nav-item" data-view="lan"><span class="nav-icon">⌘</span><span>LAN setup</span></button>
+        <button class="nav-item" data-view="server"><span class="nav-icon">▤</span><span>Server setup</span></button>
+        <button class="nav-item" data-view="routing"><span class="nav-icon">⇄</span><span>Routing</span></button>
+        <button class="nav-item" data-view="quiz"><span class="nav-icon">☑</span><span>Knowledge check</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="side-help-icon">i</div>
+        <div><strong>How to present</strong><p>Choose a topic, run a demo, then explain what the output means.</p></div>
+      </div>
+      <div class="sidebar-foot"><span class="status-dot"></span> Local simulation lab</div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb"><span>NETWORKS</span><span class="crumb-slash">/</span><strong id="current-crumb">Overview</strong></div>
+        <div class="top-actions">
+          <span class="python-pill"><span class="tiny-dot"></span> Python simulator</span>
+          <button class="pres-toggle-btn" id="presentation-mode" title="Start classroom presentation mode (Press P)" aria-pressed="false">
+            <span class="pres-toggle-icon" aria-hidden="true">📺</span>
+            <span id="presentation-label">Start Presentation</span>
+          </button>
+          <button class="reset-lab-btn" id="reset-lab" title="Reset all lab settings to defaults" aria-label="Reset lab">
+            <span aria-hidden="true">↺</span><span>Reset Lab</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="presentation-bar" id="presentation-bar" aria-label="Classroom presentation navigation">
+        <div class="presentation-bar-nav">
+          <button class="pres-nav-btn" id="pres-prev-btn" title="Previous topic (Left Arrow or PageUp)">
+            <span aria-hidden="true">←</span> <span>Previous Topic</span>
+          </button>
+          <div class="pres-indicator">
+            <span class="pres-indicator-tag">TOPIC</span>
+            <strong id="pres-topic-indicator">1 of 7 · Overview</strong>
+          </div>
+          <button class="pres-nav-btn" id="pres-next-btn" title="Next topic (Right Arrow or PageDown)">
+            <span>Next Topic</span> <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        <div class="presentation-bar-controls">
+          <button class="pres-nav-btn pres-console-toggle" id="pres-toggle-console" title="Toggle live console visibility (Press C)">
+            <span aria-hidden="true">›_</span> <span id="pres-console-label">Console: Visible</span>
+          </button>
+          <button class="pres-nav-btn pres-exit-btn" id="pres-exit-btn" title="Exit presentation mode (Escape)">
+            <span aria-hidden="true">✕</span> <span>Exit Presentation</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="page-grid" id="page-grid">
+        <main class="content-column" id="main-content">
+          <!-- OVERVIEW -->
+          <section class="view active" id="view-home" data-title="Overview">
+            <div class="page-heading">
+              <div><div class="eyebrow"><span class="eyebrow-line"></span> INTERACTIVE LEARNING ENVIRONMENT</div><h1>Computer Networks <span>Interactive Lab</span></h1><p class="lead">Explore how devices communicate — then test the concepts in a Python-powered simulation.</p></div>
+              <div class="heading-meta"><span class="meta-label">ASSIGNMENT</span><strong>Simulation using Python</strong><small>Commands · Protocols · LAN · Server · Routing</small></div>
+            </div>
+            <div class="overview-strip">
+              <div class="overview-stat"><span class="stat-icon blue">⌘</span><div><strong>Network commands</strong><small>Ping, DNS, ARP, routes</small></div></div>
+              <div class="overview-stat"><span class="stat-icon green">◈</span><div><strong>Protocol flow</strong><small>TCP, UDP, HTTP, DHCP</small></div></div>
+              <div class="overview-stat"><span class="stat-icon amber">▤</span><div><strong>LAN & server</strong><small>IP addressing and services</small></div></div>
+            </div>
+            <div class="section-header"><div><div class="eyebrow">START HERE</div><h2>Choose a practical</h2><p>Each module combines a concise explanation with an activity you can run.</p></div><span class="section-note">6 LEARNING MODULES</span></div>
+            <div class="module-grid">
+              <button class="module-card" data-view="commands"><span class="module-icon blue">›_</span><span class="module-card-title">Network commands</span><span class="module-description">See how common diagnostic commands report device and connection details.</span><span class="module-link">Explore commands <b>↗</b></span></button>
+              <button class="module-card" data-view="protocols"><span class="module-icon violet">◈</span><span class="module-card-title">Protocols</span><span class="module-description">Step through the messages exchanged during common network operations.</span><span class="module-link">Explore protocols <b>↗</b></span></button>
+              <button class="module-card" data-view="lan"><span class="module-icon green">⌘</span><span class="module-card-title">LAN setup</span><span class="module-description">Edit IPv4 addresses and test reachability between local devices.</span><span class="module-link">Open LAN lab <b>↗</b></span></button>
+              <button class="module-card" data-view="server"><span class="module-icon amber">▤</span><span class="module-card-title">Server setup</span><span class="module-description">Start or stop sample web and DNS services, then observe the response.</span><span class="module-link">Open server lab <b>↗</b></span></button>
+              <button class="module-card" data-view="routing"><span class="module-icon cyan">⇄</span><span class="module-card-title">Routing</span><span class="module-description">Inspect a routing table and trace the hops toward a destination.</span><span class="module-link">Explore routing <b>↗</b></span></button>
+              <button class="module-card" data-view="quiz"><span class="module-icon rose">☑</span><span class="module-card-title">Knowledge check</span><span class="module-description">Review the key ideas with a short interactive quiz.</span><span class="module-link">Test your learning <b>↗</b></span></button>
+            </div>
+            <div class="section-header topology-section-heading"><div><div class="eyebrow">LIVE MODEL</div><h2>Sample LAN topology</h2><p>Four logical devices on a private IPv4 subnet. Select a device to use it as the console source.</p></div><button class="text-button" data-view="lan">Configure LAN <span>→</span></button></div>
+            <div class="panel topology-panel">
+              <div class="panel-header"><div><span class="panel-title-icon">⌘</span><div><h3>192.168.1.0/24</h3><p>Star topology · Ethernet LAN</p></div></div><div class="live-status"><span class="status-dot"></span> <span id="online-summary">4 devices online</span></div></div>
+              <div class="topology-canvas" id="overview-topology">
+                <svg class="network-lines" viewBox="0 0 720 230" preserveAspectRatio="none" aria-hidden="true"><path class="link-line" id="line-pc1" d="M150 167 L356 78"/><path class="link-line" id="line-pc2" d="M355 167 L356 78"/><path class="link-line" id="line-server" d="M560 167 L356 78"/><circle class="line-node" cx="356" cy="78" r="4"/></svg>
+                <button class="device-node router-node" data-source="PC1" title="Router gateway 192.168.1.1"><span class="device-drawing router-drawing"><i></i><i></i><i></i><i></i><b>↕</b></span><strong>Router / Switch</strong><small id="ip-Router">192.168.1.1</small><span class="node-state" id="state-Router"><i></i> Online</span></button>
+                <button class="device-node pc1-node" data-source="PC1" title="Use PC1 as console source"><span class="device-drawing computer-drawing"><i></i><b></b></span><strong>PC 1</strong><small id="ip-PC1">192.168.1.10</small><span class="node-state" id="state-PC1"><i></i> Online</span></button>
+                <button class="device-node pc2-node" data-source="PC2" title="Use PC2 as console source"><span class="device-drawing computer-drawing"><i></i><b></b></span><strong>PC 2</strong><small id="ip-PC2">192.168.1.11</small><span class="node-state" id="state-PC2"><i></i> Online</span></button>
+                <button class="device-node server-node" data-source="Server" title="Use Server as console source"><span class="device-drawing server-drawing"><i></i><i></i><i></i></span><strong>Server</strong><small id="ip-Server">192.168.1.100</small><span class="node-state" id="state-Server"><i></i> Online</span></button>
+                <div class="subnet-label"><span></span>LOCAL SUBNET <b>192.168.1.0/24</b></div>
+              </div>
+              <div class="topology-legend"><span><i class="legend-dot green-dot"></i> Device online</span><span><i class="legend-line"></i> Ethernet link (logical)</span><span class="simulation-disclaimer">Topology is a software model, not a physical network.</span></div>
+            </div>
+            <div class="presenter-note"><span class="note-mark">✦</span><div><strong>Suggested narration</strong><p>“First, we have four devices in one LAN. Each device has an IPv4 address. We’ll use Python to model commands and show what happens when a device is reachable — or unavailable.”</p></div></div>
+          </section>
+
+          <!-- COMMANDS -->
+          <section class="view" id="view-commands" data-title="Network commands">
+            <div class="page-heading compact-heading"><div><div class="eyebrow">MODULE 01 · DIAGNOSIS</div><h1>Network <span>commands</span></h1><p class="lead">Commands help administrators inspect configuration, check connectivity, and investigate faults.</p></div><span class="round-index">01</span></div>
+            <div class="concept-banner"><div class="concept-symbol">›_</div><div><strong>What is a network command?</strong><p>A command is an instruction used to request network information or test a specific behaviour. The simulator accepts a small, safe set of familiar command patterns and models their results in Python.</p></div></div>
+            <div class="section-header"><div><h2>Command reference</h2><p>Select “Run in console” to load an example into the live console.</p></div><span class="section-note">PYTHON-MODELLED</span></div>
+            <div class="command-reference" id="command-reference">
+              <div class="command-row"><code>ping 192.168.1.11</code><div><strong>Connectivity test</strong><p>Sends a simulated ICMP echo request and reports whether a configured host replies.</p></div><button class="mini-run" data-command="ping 192.168.1.11">Run in console ↗</button></div>
+              <div class="command-row"><code>ipconfig</code><div><strong>IP configuration</strong><p>Displays the selected device's IPv4 address, mask, gateway, and adapter status.</p></div><button class="mini-run" data-command="ipconfig">Run in console ↗</button></div>
+              <div class="command-row"><code>tracert 203.0.113.25</code><div><strong>Route tracing</strong><p>Illustrates the sequence of router hops toward a destination address.</p></div><button class="mini-run" data-command="tracert 203.0.113.25">Run in console ↗</button></div>
+              <div class="command-row"><code>nslookup server.local</code><div><strong>DNS lookup</strong><p>Looks up a name in the simulator's sample DNS record table.</p></div><button class="mini-run" data-command="nslookup server.local">Run in console ↗</button></div>
+              <div class="command-row"><code>arp -a</code><div><strong>Address resolution cache</strong><p>Lists IPv4-to-MAC mappings for online devices in this lab model.</p></div><button class="mini-run" data-command="arp -a">Run in console ↗</button></div>
+              <div class="command-row"><code>route print</code><div><strong>Routing table</strong><p>Shows the local subnet route and default gateway used by the model.</p></div><button class="mini-run" data-command="route print">Run in console ↗</button></div>
+              <div class="command-row"><code>netstat</code><div><strong>Connection overview</strong><p>Displays example TCP/UDP connection states, not real OS sockets.</p></div><button class="mini-run" data-command="netstat">Run in console ↗</button></div>
+              <div class="command-row"><code>curl http://server.local</code><div><strong>HTTP request</strong><p>Requests a sample page from the in-app simulated web service.</p></div><button class="mini-run" data-command="curl http://server.local">Run in console ↗</button></div>
+              <div class="command-row"><code>dhcp renew</code><div><strong>Address assignment</strong><p>Demonstrates the Discover, Offer, Request, and ACK sequence.</p></div><button class="mini-run" data-command="dhcp renew">Run in console ↗</button></div>
+            </div>
+            <div class="presenter-note"><span class="note-mark">✦</span><div><strong>Explain the result, not just the command</strong><p>Use ping to contrast a successful response with a destination-unreachable case. Then use ipconfig to connect the output back to IP addressing.</p></div></div>
+          </section>
+
+          <!-- PROTOCOLS -->
+          <section class="view" id="view-protocols" data-title="Protocols">
+            <div class="page-heading compact-heading"><div><div class="eyebrow">MODULE 02 · COMMUNICATION RULES</div><h1>Network <span>protocols</span></h1><p class="lead">Protocols define the format, order, and meaning of messages exchanged between devices.</p></div><span class="round-index">02</span></div>
+            <div class="protocol-tabs" role="tablist" aria-label="Choose a protocol">
+              <button class="protocol-tab active" data-protocol="tcp">TCP</button><button class="protocol-tab" data-protocol="udp">UDP</button><button class="protocol-tab" data-protocol="http">HTTP</button><button class="protocol-tab" data-protocol="dns">DNS</button><button class="protocol-tab" data-protocol="dhcp">DHCP</button><button class="protocol-tab" data-protocol="arp">ARP</button>
+            </div>
+            <div class="panel protocol-detail" id="protocol-detail"></div>
+            <div class="section-header"><div><h2>Run the message sequence</h2><p>Python generates each step so you can explain what the protocol is doing.</p></div></div>
+            <div class="panel sequence-panel"><div class="sequence-intro"><span class="sequence-icon">⇢</span><div><strong id="sequence-title">TCP three-way handshake</strong><p id="sequence-description">See how a TCP connection is established before application data is exchanged.</p></div><button class="primary-button" id="run-protocol">Run sequence <span>▶</span></button></div><div class="event-timeline" id="protocol-timeline"><div class="empty-timeline">Run the sequence to reveal protocol events.</div></div></div>
+            <div class="presenter-note"><span class="note-mark">✦</span><div><strong>Classroom tip</strong><p>Compare TCP and UDP: TCP establishes a connection and provides reliable, ordered delivery; UDP sends datagrams without a connection handshake and does not guarantee delivery.</p></div></div>
+          </section>
+
+          <!-- LAN -->
+          <section class="view" id="view-lan" data-title="LAN setup">
+            <div class="page-heading compact-heading"><div><div class="eyebrow">MODULE 03 · LOCAL AREA NETWORK</div><h1>LAN <span>setup</span></h1><p class="lead">Configure hosts on one IPv4 subnet and test local reachability.</p></div><span class="round-index">03</span></div>
+            <div class="concept-banner"><div class="concept-symbol">⌘</div><div><strong>LAN in a nutshell</strong><p>A Local Area Network connects devices in a limited area. Devices in the same IPv4 subnet can typically communicate directly at the data-link layer after address resolution, without sending the traffic through a router.</p></div></div>
+            <div class="panel topology-panel lan-topology-card"><div class="panel-header"><div><span class="panel-title-icon">⌘</span><div><h3>Interactive topology</h3><p>Click a host below to make it the console source.</p></div></div><div class="live-status"><span class="status-dot"></span><span id="lan-online-summary">4 devices online</span></div></div><div class="topology-canvas large-topology" id="lan-topology"></div><div class="topology-legend"><span><i class="legend-dot green-dot"></i> Online</span><span><i class="legend-dot offline-dot"></i> Offline</span><span class="simulation-disclaimer">Links represent logical connections.</span></div></div>
+            <div class="section-header"><div><h2>Device configuration</h2><p>Edit an IPv4 address or toggle a host's state. Changes affect simulation results.</p></div><button class="small-button" id="reset-device-config">Reset defaults</button></div>
+            <div class="device-config-grid" id="device-config-grid"></div>
+            <div class="concept-tip"><strong>Try this experiment</strong><p>Change PC2 to an unused address such as <code>192.168.1.22</code>, then run <code>ping 192.168.1.22</code>. Next, toggle PC2 offline and repeat to compare the outcomes.</p></div>
+          </section>
+
+          <!-- SERVER -->
+          <section class="view" id="view-server" data-title="Server setup">
+            <div class="page-heading compact-heading"><div><div class="eyebrow">MODULE 04 · PROVIDING SERVICES</div><h1>Server <span>setup</span></h1><p class="lead">A server listens for requests and returns a service response over the network.</p></div><span class="round-index">04</span></div>
+            <div class="server-overview"><div class="server-illustration"><div class="server-rack"><i></i><i></i><i></i></div><span>SERVER</span></div><div class="server-overview-copy"><div class="eyebrow">LAB SERVER</div><h2>One host, multiple services</h2><p>This model hosts a sample web endpoint on port <code>8080</code> and a small DNS record table. Stop a service to demonstrate what a client sees when a server is unavailable.</p><div class="server-address"><span>IPv4 ADDRESS</span><strong id="server-ip-label">192.168.1.100</strong><span class="server-port-label">HTTP · PORT 8080</span></div></div></div>
+            <div class="section-header"><div><h2>Service controls</h2><p>These switches change the Python simulation's response behaviour.</p></div><span class="section-note">LOCAL MODEL ONLY</span></div>
+            <div class="service-grid">
+              <div class="panel service-card"><div class="service-card-top"><span class="service-icon blue">↔</span><span class="service-state" id="web-state"><i></i> Running</span></div><h3>Web service</h3><p>Returns a sample HTTP 200 response to <code>curl http://server.local</code>.</p><label class="switch-row"><span><strong>HTTP service</strong><small>Port 8080 · sample page</small></span><input type="checkbox" id="web-toggle" checked><span class="switch" aria-hidden="true"></span></label><button class="secondary-button" id="test-web">Send sample HTTP request <span>→</span></button></div>
+              <div class="panel service-card"><div class="service-card-top"><span class="service-icon violet">⌕</span><span class="service-state" id="dns-state"><i></i> Running</span></div><h3>DNS resolver</h3><p>Maps configured hostnames such as <code>server.local</code> to sample IPv4 addresses.</p><label class="switch-row"><span><strong>DNS service</strong><small>UDP/TCP · port 53 concept</small></span><input type="checkbox" id="dns-toggle" checked><span class="switch" aria-hidden="true"></span></label><button class="secondary-button" id="test-dns">Resolve server.local <span>→</span></button></div>
+            </div>
+            <div class="section-header"><div><h2>Request lifecycle</h2><p>A simplified HTTP request-response exchange.</p></div></div>
+            <div class="panel request-flow"><div class="flow-step"><span>01</span><strong>Client</strong><small>Builds a GET request</small></div><span class="flow-arrow">→</span><div class="flow-step"><span>02</span><strong>Network</strong><small>Delivers to port 8080</small></div><span class="flow-arrow">→</span><div class="flow-step"><span>03</span><strong>Server</strong><small>Processes the request</small></div><span class="flow-arrow">→</span><div class="flow-step"><span>04</span><strong>Response</strong><small>Returns status + content</small></div></div>
+            <div class="presenter-note"><span class="note-mark">✦</span><div><strong>Demonstration idea</strong><p>Run the sample HTTP request while the web service is on. Switch it off and run the same command again. Explain the difference between a listening service and a network connection.</p></div></div>
+          </section>
+
+          <!-- ROUTING -->
+          <section class="view" id="view-routing" data-title="Routing">
+            <div class="page-heading compact-heading"><div><div class="eyebrow">MODULE 05 · PATH SELECTION</div><h1>Routing & <span>packet paths</span></h1><p class="lead">Routers forward packets between IP networks using destination addresses and routing tables.</p></div><span class="round-index">05</span></div>
+            <div class="concept-banner"><div class="concept-symbol">⇄</div><div><strong>How a router decides</strong><p>The router checks the destination IP against its routing table and forwards a packet using the best matching route. A host typically sends traffic for remote networks to its default gateway.</p></div></div>
+            <div class="panel routing-table-panel"><div class="panel-header"><div><span class="panel-title-icon">▤</span><div><h3>IPv4 routing table</h3><p>Sample table for the currently selected console host.</p></div></div><button class="mini-run" data-command="route print">Print in console ↗</button></div><div class="table-wrap"><table class="routing-table"><thead><tr><th>Destination</th><th>Netmask</th><th>Gateway</th><th>Type</th></tr></thead><tbody id="routing-table-body"><tr><td>0.0.0.0</td><td>0.0.0.0</td><td>192.168.1.1</td><td><span class="route-tag">Default</span></td></tr><tr><td>192.168.1.0</td><td>255.255.255.0</td><td>On-link</td><td><span class="route-tag local">Local</span></td></tr><tr><td>192.168.1.10</td><td>255.255.255.255</td><td>On-link</td><td><span class="route-tag local">Host</span></td></tr></tbody></table></div></div>
+            <div class="section-header"><div><h2>Trace a route</h2><p>Each hop shows a router that would forward the packet along the modeled path.</p></div></div>
+            <div class="panel trace-panel"><div class="trace-form"><label for="trace-target">Destination IPv4 address</label><div class="input-action-row"><input id="trace-target" type="text" value="203.0.113.25" spellcheck="false"><button class="primary-button" id="run-trace">Trace path <span>→</span></button></div><small>Uses documentation-only addresses for demonstration; this is not an internet traceroute.</small></div><div class="trace-steps" id="trace-steps"><div class="trace-stop"><span class="trace-pin">1</span><div><strong>Local gateway</strong><small>192.168.1.1</small></div><span class="trace-time">1–2 ms</span></div><div class="trace-stop"><span class="trace-pin">2</span><div><strong>Sample upstream router</strong><small>198.51.100.1</small></div><span class="trace-time">8–9 ms</span></div><div class="trace-stop"><span class="trace-pin">3</span><div><strong>Destination</strong><small>203.0.113.25</small></div><span class="trace-time">18 ms</span></div></div></div>
+            <div class="presenter-note"><span class="note-mark">✦</span><div><strong>Key distinction</strong><p>A switch forwards frames within a LAN using MAC addresses; a router forwards packets between IP networks using IP addresses and routes.</p></div></div>
+          </section>
+
+          <!-- QUIZ -->
+          <section class="view" id="view-quiz" data-title="Knowledge check">
+            <div class="page-heading compact-heading"><div><div class="eyebrow">RECAP · CHECK YOUR UNDERSTANDING</div><h1>Knowledge <span>check</span></h1><p class="lead">Use these quick questions to review the concepts before you finish the presentation.</p></div><span class="round-index">06</span></div>
+            <div class="quiz-progress-row"><span id="quiz-progress-label">QUESTION 1 OF 4</span><div class="quiz-progress-track"><span id="quiz-progress-bar"></span></div><span id="quiz-score-label">Score: 0</span></div>
+            <div class="panel quiz-card" id="quiz-card"><div class="quiz-number" id="quiz-number">Q1</div><h2 id="quiz-question">Which command is commonly used to test whether an IP host is reachable?</h2><div class="quiz-options" id="quiz-options"></div><div class="quiz-footer"><span id="quiz-feedback" aria-live="polite">Choose one answer to check it.</span><button class="primary-button" id="quiz-next" disabled>Check answer <span>→</span></button></div></div>
+            <div class="quiz-restart-row"><span>Questions cover commands, protocols, LANs, and routing.</span><button class="text-button" id="quiz-restart">Restart quiz ↺</button></div>
+            <div class="concept-tip"><strong>Presentation wrap-up</strong><p>Summarize the connection between the topics: commands help diagnose, protocols define communication, LAN configuration connects local hosts, servers provide services, and routing moves packets between networks.</p></div>
+          </section>
+        </main>
+
+        <aside class="console-column" aria-label="Interactive Python simulation console">
+          <div class="console-panel panel">
+            <div class="console-heading"><div><span class="console-heading-icon">›_</span><div><h2>Live Python console</h2><p>Run commands · inspect results</p></div></div><span class="console-live"><i></i> READY</span></div>
+            <div class="console-source-row"><label for="console-source">SOURCE DEVICE</label><select id="console-source"><option value="PC1">PC1 · 192.168.1.10</option><option value="PC2">PC2 · 192.168.1.11</option><option value="Server">Server · 192.168.1.100</option></select></div>
+            <div class="terminal-window" id="terminal-window" aria-label="Console output" aria-live="polite">
+              <div class="terminal-top">
+                <span><i></i><i></i><i></i></span>
+                <small>python · network_lab</small>
+                <button id="clear-terminal" class="terminal-clear-btn" title="Clear console output">Clear ⌫</button>
+              </div>
+              <div class="terminal-output" id="terminal-output">
+                <div class="terminal-welcome">NETLAB PYTHON SIMULATOR <span>v1.0</span></div>
+                <div class="terminal-muted">Ready for a command.</div>
+                <div class="terminal-muted">Type <b>help</b> to list supported commands.</div>
+                <div class="terminal-muted">All responses are simulated; no real packets are sent.</div>
+              </div>
+              <form class="terminal-form" id="terminal-form">
+                <label for="terminal-input" class="terminal-prompt">lab&nbsp;›</label>
+                <input id="terminal-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type a network command…" aria-label="Enter a network command">
+                <button type="submit" id="run-terminal-btn" class="terminal-run-btn" aria-label="Run command" title="Run command (Enter)">Run ↵</button>
+              </form>
+            </div>
+            <div class="console-presets">
+              <div class="preset-label">QUICK COMMANDS (CLICK TO RUN)</div>
+              <div class="preset-chips">
+                <button data-command="ping 192.168.1.11">ping</button>
+                <button data-command="ipconfig">ipconfig</button>
+                <button data-command="nslookup server.local">nslookup</button>
+                <button data-command="tracert 203.0.113.25">tracert</button>
+                <button data-command="arp -a">arp -a</button>
+                <button data-command="route print">route print</button>
+                <button data-command="netstat">netstat</button>
+                <button data-command="curl http://server.local">curl</button>
+                <button data-command="dhcp renew">dhcp renew</button>
+                <button data-command="help">help</button>
+              </div>
+            </div>
+            <div class="console-foot"><span class="status-dot"></span><span>Python model active</span><span class="console-foot-right" id="last-run">No commands yet</span></div>
+          </div>
+          <div class="panel event-panel"><div class="event-panel-heading"><div><span class="event-heading-mark">≋</span><div><h3>Simulation events</h3><p>What happened under the hood</p></div></div><button class="subtle-icon-button" id="clear-events" title="Clear simulation events">↺</button></div><div class="event-list" id="event-list"><div class="event-empty"><span>≋</span><strong>No events yet</strong><small>Run a command or protocol sequence to see each modeled step.</small></div></div><div class="event-panel-foot"><span>EVENT LOG</span><span id="event-count">0 events</span></div></div>
+          <div class="safety-note"><span class="safety-shield">✓</span><p><strong>Safe by design</strong><br>Commands run in a Python simulator, not your operating system. Sample addresses and timing are illustrative.</p></div>
+        </aside>
+      </div>
+      <footer class="app-footer"><span>NETLAB · COMPUTER NETWORKS ASSIGNMENT</span><span>Python-powered educational simulation <i>·</i> v1.0</span></footer>
+    </div>
+  </div>
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

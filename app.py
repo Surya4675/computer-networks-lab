@@ -236,6 +236,14 @@ def handle_command(raw_command: str, source: str = "PC1"):
     return {"ok": False, "output": f"'{name}' is not supported by this lab console. Type 'help' for available commands.", "events": []}
 
 
+@app.after_request
+def add_cache_headers(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.get("/")
 def index():
     return render_template("index.html")

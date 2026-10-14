@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#17243a">
   <meta name="description" content="An interactive computer networks presentation and Python-powered teaching simulator for commands, protocols, LAN setup, servers, and routing.">
   <title>NetLab — Computer Networks Interactive Lab</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}?v=1.1">
 </head>
 <body>
   <div class="app-shell">
@@ -228,6 +228,6 @@
     </div>
   </div>
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=1.1" defer></script>
 </body>
 </html>

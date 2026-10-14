@@ -38,7 +38,7 @@
       <header class="topbar">
         <div class="breadcrumb"><span>NETWORKS</span><span class="crumb-slash">/</span><strong id="current-crumb">Overview</strong></div>
         <div class="top-actions">
-          <span class="python-pill"><span class="tiny-dot"></span> Python simulator</span>
+          <span class="python-pill" id="backend-status-pill"><span class="tiny-dot"></span> <span id="backend-status-label">Python simulator</span></span>
           <button class="pres-toggle-btn" id="presentation-mode" title="Start classroom presentation mode (Press P)" aria-pressed="false">
             <span class="pres-toggle-icon" aria-hidden="true">📺</span>
             <span id="presentation-label">Start Presentation</span>
@@ -222,7 +222,7 @@
                 <button data-command="help">help</button>
               </div>
             </div>
-            <div class="console-foot"><span class="status-dot"></span><span>Python model active</span><span class="console-foot-right" id="last-run">No commands yet</span></div>
+            <div class="console-foot"><span class="status-dot" id="console-status-dot"></span><span id="console-status-label">Python model active</span><span class="console-foot-right" id="last-run">No commands yet</span></div>
           </div>
           <div class="panel event-panel"><div class="event-panel-heading"><div><span class="event-heading-mark">≋</span><div><h3>Simulation events</h3><p>What happened under the hood</p></div></div><button class="subtle-icon-button" id="clear-events" title="Clear simulation events">↺</button></div><div class="event-list" id="event-list"><div class="event-empty"><span>≋</span><strong>No events yet</strong><small>Run a command or protocol sequence to see each modeled step.</small></div></div><div class="event-panel-foot"><span>EVENT LOG</span><span id="event-count">0 events</span></div></div>
           <div class="safety-note"><span class="safety-shield">✓</span><p><strong>Safe by design</strong><br>Commands run in a Python simulator, not your operating system. Sample addresses and timing are illustrative.</p></div>

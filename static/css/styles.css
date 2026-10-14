@@ -192,3 +192,38 @@
   max-width: 1280px !important;
   margin: 0 auto !important;
 }
+
+/* Backend status indicators (online, waking, offline) */
+.python-pill.status-pill-offline {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  color: #991b1b !important;
+}
+.python-pill.status-pill-offline .tiny-dot {
+  background: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.16) !important;
+}
+.python-pill.status-pill-waking {
+  background: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+.python-pill.status-pill-waking .tiny-dot {
+  background: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245,158,11,.18) !important;
+  animation: pulseDot 1s infinite alternate !important;
+}
+.status-dot.offline {
+  background: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.16) !important;
+}
+.status-dot.waking {
+  background: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245,158,11,.18) !important;
+  animation: pulseDot 1s infinite alternate !important;
+}
+@keyframes pulseDot {
+  0% { opacity: 0.35; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1.15); }
+}
+

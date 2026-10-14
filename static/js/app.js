@@ -45,14 +45,59 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 }
 
-async function api(path, payload) {
+function setBackendConnected(online) {
+  const pill = $('#backend-status-pill') || $('.python-pill');
+  const pillLabel = $('#backend-status-label');
+  const dot = $('#console-status-dot') || $('.console-foot .status-dot');
+  const label = $('#console-status-label') || $('.console-foot span:nth-child(2)');
+  if (pill) {
+    pill.classList.toggle('status-pill-offline', !online);
+    pill.classList.remove('status-pill-waking');
+  }
+  if (pillLabel) pillLabel.textContent = online ? 'Python simulator' : 'Backend offline';
+  if (dot) {
+    dot.classList.toggle('offline', !online);
+    dot.classList.remove('waking');
+  }
+  if (label) label.textContent = online ? 'Python model active' : 'Backend offline';
+}
+
+function setBackendConnecting() {
+  const pill = $('#backend-status-pill') || $('.python-pill');
+  const pillLabel = $('#backend-status-label');
+  const dot = $('#console-status-dot') || $('.console-foot .status-dot');
+  const label = $('#console-status-label') || $('.console-foot span:nth-child(2)');
+  if (pill) {
+    pill.classList.remove('status-pill-offline');
+    pill.classList.add('status-pill-waking');
+  }
+  if (pillLabel) pillLabel.textContent = 'Waking backend…';
+  if (dot) {
+    dot.classList.remove('offline');
+    dot.classList.add('waking');
+  }
+  if (label) label.textContent = 'Waking backend…';
+}
+
+async function api(path, payload, retries = 1) {
   const options = payload === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)};
-  const response = await fetch(path, options);
-  let data;
-  try { data = await response.json(); } catch { throw new Error('The server returned an unreadable response.'); }
-  if (!response.ok && !data.message) throw new Error(`Request failed (${response.status}).`);
-  if (!response.ok) throw new Error(data.message || 'Request failed.');
-  return data;
+  try {
+    const response = await fetch(path, options);
+    let data;
+    try { data = await response.json(); } catch { throw new Error('The server returned an unreadable response.'); }
+    if (!response.ok && !data.message) throw new Error(`Request failed (${response.status}).`);
+    if (!response.ok) throw new Error(data.message || 'Request failed.');
+    setBackendConnected(true);
+    return data;
+  } catch (err) {
+    if (retries > 0 && (err.name === 'TypeError' || String(err.message).toLowerCase().includes('fetch'))) {
+      setBackendConnecting();
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return api(path, payload, retries - 1);
+    }
+    setBackendConnected(false);
+    throw err;
+  }
 }
 
 function toast(message, type = '') {
@@ -140,8 +185,12 @@ async function runCommand(command = $('#terminal-input').value) {
     await refreshState(false);
     if (!result.ok) toast('Simulation completed with an unreachable or unavailable target.', 'error');
   } catch (error) {
-    addResultOnly(`Could not reach the Python lab backend. Is app.py running?\n${error.message}`, false);
-    toast('The Python lab backend is unavailable.', 'error');
+    const isLocal = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+    const reason = isLocal
+      ? 'Local simulation server is not responding. Ensure "python app.py" is active on http://127.0.0.1:5000.'
+      : 'Cloud simulation server (Render) is waking up. Free tier instances sleep after 15 minutes of inactivity and take ~30-50 seconds for cold start. Please retry in 15 seconds.';
+    addResultOnly(`Simulation backend unreachable (${error.message}).\n\n📌 Diagnostic:\n${reason}`, false);
+    toast(isLocal ? 'Local Python backend unreachable.' : 'Render free instance waking up (cold start)…', 'error');
   } finally {
     $('#terminal-input').disabled = false;
     $('#terminal-form button').disabled = false;
@@ -294,13 +343,23 @@ function setServiceState(id, running) {
   element.innerHTML = `<i></i> ${running ? 'Running' : 'Stopped'}`;
 }
 
+let stateRetryTimer = null;
 async function refreshState(showError = true) {
   try {
-    labState = await api('/api/state');
+    labState = await api('/api/state', undefined, 0);
     updateSourceOptions();
     renderAllState();
+    setBackendConnected(true);
+    if (stateRetryTimer) { clearTimeout(stateRetryTimer); stateRetryTimer = null; }
   } catch (error) {
-    if (showError) toast(`Could not load lab state: ${error.message}`, 'error');
+    setBackendConnected(false);
+    if (showError) toast('Connecting to simulator backend…', 'info');
+    if (!stateRetryTimer) {
+      stateRetryTimer = setTimeout(() => {
+        stateRetryTimer = null;
+        refreshState(false);
+      }, 4000);
+    }
   }
 }
 

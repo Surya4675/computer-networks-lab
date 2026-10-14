@@ -449,13 +449,16 @@ function togglePresentationMode(force) {
   
   if (willEnable) {
     document.body.classList.add('presenter-mode');
+    document.body.classList.remove('pres-hide-console');
+    const consoleLabel = $('#pres-console-label');
+    if (consoleLabel) consoleLabel.textContent = 'Console: Visible';
     $('#presentation-label').textContent = 'Exit Presentation';
     $('#presentation-mode').setAttribute('aria-pressed', 'true');
     $('#presentation-mode').classList.add('active');
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
-    toast('Classroom Presentation Mode active. Use ←/→ or PageUp/PageDown to present.', 'success');
+    toast('Classroom Presentation Mode active. Live console is visible alongside slides.', 'success');
   } else {
     document.body.classList.remove('presenter-mode');
     document.body.classList.remove('pres-hide-console');

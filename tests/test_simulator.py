@@ -43,5 +43,22 @@ class NetworkSimulatorTests(unittest.TestCase):
         self.assertTrue(data['ok'])
         self.assertEqual(len(data['events']), 3)
 
+    def test_state_returns_hosts_and_services(self):
+        response = self.client.get('/api/state')
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn('hosts', data)
+        self.assertIn('PC1', data['hosts'])
+        self.assertIn('Router', data['hosts'])
+        self.assertIn('Server', data['hosts'])
+
+    def test_reset_restores_initial_state(self):
+        self.client.post('/api/device', json={'device':'PC2','field':'online','value':False})
+        reset_res = self.client.post('/api/reset', json={})
+        self.assertEqual(reset_res.status_code, 200)
+        state_res = self.client.get('/api/state')
+        self.assertTrue(state_res.get_json()['hosts']['PC2']['online'])
+
 if __name__ == '__main__':
     unittest.main()
+

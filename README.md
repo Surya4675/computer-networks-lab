@@ -1,81 +1,134 @@
-# Computer Networks Interactive Lab
+# Computer Networks Interactive Lab (NetLab)
 
-A small classroom-ready web app that combines presentation content and an interactive Python-powered network simulator. The interface uses a restrained navy, slate, off-white, and blue palette (no full-screen gradients).
+A classroom-ready web application combining interactive presentation content and a Python-powered network simulator. The interface features a clean, high-contrast academic technical-lab design with dedicated presentation tools, live topology modeling, protocol event timelines, and diagnostic network commands.
+
+🌐 **Live Deployment:** [https://computer-networks-lab.onrender.com](https://computer-networks-lab.onrender.com)  
+📦 **GitHub Repository:** [https://github.com/Surya4675/computer-networks-lab](https://github.com/Surya4675/computer-networks-lab)
+
+---
+
+## Project Structure
+
+```text
+computer-networks-lab/
+├── app.py                  # Core Flask backend & Python simulation engine
+├── requirements.txt        # Python production dependencies (Flask, Gunicorn)
+├── Procfile                # WSGI process configuration for Render/cloud deployment
+├── render.yaml             # Render infrastructure blueprint (auto-deploy spec)
+├── run_windows.bat         # One-click Windows local launcher script
+├── README.md               # Project documentation and usage guide
+├── .gitignore              # Git ignore rules for virtualenvs, caches, and OS files
+├── static/
+│   ├── css/
+│   │   └── styles.css      # Academic lab styling, presentation layout & themes
+│   └── js/
+│       └── app.js          # Interactive UI logic, topology rendering & controls
+├── templates/
+│   └── index.html          # Semantic HTML5 single-page application template
+└── tests/
+    └── test_simulator.py   # Unit test suite for simulator endpoints & models
+```
+
+---
 
 ## Features
 
-- Topic-led presentation content for commands, protocols, LAN setup, server setup, and routing.
-- Dedicated Classroom Presentation Mode with fullscreen support, Previous/Next slide controls, and keyboard navigation (`←`/`→`, `PageUp`/`PageDown`, `P` to toggle, `C` to show/hide console, `Esc` to exit).
-- Projector-first academic technical-lab typography: large headings (36–44px), section titles (28–32px), body explanations (21–24px), navigation (18–20px), and console text (19–21px) with high foreground/background contrast.
-- Python-backed command console with a strict allowlist (`ping`, `ipconfig`, `tracert`, `nslookup`, `arp -a`, `route print`, `netstat`, `curl`, `dhcp renew`, and `help`).
-- Interactive topology: edit lab IP addresses and bring devices online/offline; test reachability from the console.
-- Protocol walkthroughs for TCP, UDP, HTTP, DNS, DHCP, and ARP with event timelines.
-- Server and DNS service toggles to demonstrate success and failure cases.
-- Routing table explanation and trace-route example.
-- Short knowledge-check quiz, responsive layout, keyboard-friendly controls, reset lab button.
+- **Topic-Led Presentation:** Interactive modules covering network commands, protocols, LAN architecture, server setup, and routing.
+- **Dedicated Presentation Mode:** Fullscreen-ready slide navigation with previous/next controls, keyboard navigation (`←`/`→`, `PageUp`/`PageDown`), and side-by-side interactive console.
+- **Python-Backed Console:** Secure in-app command runner with allowlisted diagnostic utilities (`ping`, `ipconfig`, `tracert`, `nslookup`, `arp -a`, `route print`, `netstat`, `curl`, `dhcp renew`, and `help`).
+- **Interactive LAN Topology:** Click hosts to assign command source, edit IPv4 addresses, and toggle devices online/offline with real-time SVG link highlights.
+- **Protocol Flow Demonstrations:** Step-by-step event sequences for TCP (3-way handshake), UDP (datagrams), HTTP (GET request/response), DNS (resolution), DHCP (DORA), and ARP.
+- **Server & DNS Service Toggles:** Test realistic client-side failures by toggling web port 8080 or DNS resolution on and off.
+- **IPv4 Routing & Trace Route:** Interactive routing table and multi-hop traceroute simulation toward remote destinations.
+- **Knowledge Check Quiz:** 4-question interactive recap with immediate feedback, scoring, and explanation.
+
+---
 
 ## Requirements
 
 - Python 3.10+
-- Flask (installed with `pip install -r requirements.txt`)
+- Dependencies listed in `requirements.txt`:
+  - `Flask>=3.0,<4.0`
+  - `gunicorn>=21.2.0`
 
-## Run locally (Windows PowerShell)
+---
+
+## How to Run Locally
+
+### Option A: One-Click Launcher (Windows)
+Double-click `run_windows.bat` in the project root folder. It checks dependencies, starts the Flask server, and automatically opens `http://127.0.0.1:5000` in your default browser.
+
+### Option B: PowerShell / Terminal
 
 ```powershell
+# 1. Navigate to the project directory
 cd computer-networks-lab
-py -m venv .venv
-.venv\Scripts\Activate.ps1
+
+# 2. Create and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\Activate.ps1    # On Linux/macOS: source .venv/bin/activate
+
+# 3. Install dependencies
 pip install -r requirements.txt
+
+# 4. Start the application
 python app.py
 ```
 
-Open **http://127.0.0.1:5000** in your browser. Stop the server with `Ctrl+C`.
+Open **http://127.0.0.1:5000** in your browser. Press `Ctrl + C` in the terminal to stop the server.
 
-## Console examples
+---
 
-```text
-help
-ipconfig
-ping 192.168.1.11
-ping 192.168.1.222
-nslookup server.local
-tracert 203.0.113.25
-arp -a
-route print
-curl http://server.local
-dhcp renew
+## Running Automated Tests
+
+Run the included unit test suite using Python's built-in `unittest` runner:
+
+```bash
+python -m unittest discover tests
 ```
 
-## Classroom presentation controls
+Tests validate command parsing, unreachable host handling, unknown command isolation, duplicate IP rejection, server toggle states, protocol sequence generations, state retrieval, and full system reset.
 
-- **Start / Exit Presentation:** Click the `Start Presentation` / `Exit Presentation` button in the top navigation bar, or press `P`.
+---
+
+## Classroom Presentation Mode Controls
+
+- **Start / Exit Presentation:** Click the `📺 Start Presentation` button in the top navigation bar or press `P`.
 - **Next Topic:** Press `→` (Right Arrow) or `PageDown`.
 - **Previous Topic:** Press `←` (Left Arrow) or `PageUp`.
-- **Show / Hide Live Console:** Press `C` while in presentation mode to toggle between side-by-side demonstration and full-slide views.
+- **Show / Hide Live Console:** Press `C` while presenting to toggle between side-by-side live demonstration and full-slide views.
 - **Exit Presentation:** Press `Esc` or click `Exit Presentation ✕`.
 
-## Important simulation note
+---
 
-This is a teaching simulator. The command parser is implemented in Python and never passes input to a system shell. Outputs, packet steps, hop timings, DNS answers, and connection states are illustrative model results; they do not represent real network traffic. IP and service toggles affect the in-app model only. The app is designed for localhost classroom demos, not as a production network management service.
+## Console Command Reference
 
-## Functional requirements covered
+| Command | Category | Description |
+| :--- | :--- | :--- |
+| `ping <ip>` | Connectivity | Sends ICMP echo requests and reports reachability and round-trip times. |
+| `ipconfig` | Configuration | Displays local IP address, subnet mask, default gateway, and status. |
+| `nslookup <domain>` | DNS | Resolves local and sample domain names using the simulated DNS table. |
+| `tracert <ip>` | Routing | Simulates router hops and latency toward the destination IP. |
+| `arp -a` | Data Link | Displays the local Address Resolution Protocol IP-to-MAC mapping cache. |
+| `route print` | Network Layer | Prints the active IPv4 routing table for the selected host. |
+| `netstat` | Transport | Displays example active TCP and UDP connection states. |
+| `curl <url>` | Application | Issues a simulated HTTP GET request to the local web server on port 8080. |
+| `dhcp renew` | Configuration | Simulates the 4-part DORA exchange for dynamic address assignment. |
+| `help` | Reference | Lists all supported simulator commands. |
+| `clear` | Terminal | Clears the terminal output buffer. |
 
-1. Present topic-specific explanations and examples.
-2. Accept supported console commands and return clear output.
-3. Show a LAN topology and current IP/status configuration.
-4. Validate IP addresses and reject duplicate IP assignments.
-5. Demonstrate protocol sequences and event-level explanations.
-6. Demonstrate server/DNS success and failure by switching services.
-7. Show a routing table and a simulated trace route.
-8. Allow a quiz interaction and reset the lab to default state.
+---
 
-## Non-functional requirements covered
+## Deployment Configuration (Render)
 
-- **Usability:** clear navigation, presets, copyable terminal text, direct feedback, keyboard support.
-- **Reliability:** deterministic examples, input validation, explicit errors, reset control.
-- **Safety:** allowlisted simulator commands only; no arbitrary shell execution or real packet transmission.
-- **Performance:** lightweight HTML/CSS/JS and small Flask JSON endpoints.
-- **Maintainability:** separate Flask logic, template, stylesheet, and front-end JavaScript.
-- **Portability:** runs with Python and Flask on Windows, macOS, and Linux.
-- **Responsiveness:** layout adapts to laptop, tablet, and mobile widths.
-- **Accessibility:** semantic controls, visible focus styles, status labels, and reduced-motion support.
+This project is configured for one-click continuous deployment on Render:
+
+- **Procfile:** Declares `web: gunicorn app:app` for production WSGI serving.
+- **render.yaml:** Declares the Python runtime environment, build command (`pip install -r requirements.txt`), and auto-deploy settings.
+- **Port Handling:** `app.py` dynamically binds to `os.environ.get("PORT", 5000)` and listens on `0.0.0.0`.
+
+---
+
+## Important Simulation Note
+
+This application is designed specifically for academic and educational demonstrations. The command parser is written in pure Python and never delegates commands to the operating system shell. Output timings, packet traces, and connection records are deterministic teaching models. No real network packets are transmitted.

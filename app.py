@@ -26,6 +26,9 @@ STATE = {
 
 DNS_RECORDS = {
     "example.com": "93.184.216.34",
+    "google.com": "8.8.8.8",
+    "dns.google": "8.8.8.8",
+    "cloudflare.com": "1.1.1.1",
     "server.local": "192.168.1.100",
     "lab.local": "192.168.1.100",
     "router.local": "192.168.1.1",
@@ -81,28 +84,61 @@ def handle_command(raw_command: str, source: str = "PC1"):
 
     if name == "ping":
         if len(args) != 1:
-            return {"ok": False, "output": "Usage: ping <IPv4 address>\nExample: ping 192.168.1.11", "events": []}
-        target = args[0]
-        try:
-            parsed_target = ipaddress.ip_address(target)
-            if not isinstance(parsed_target, ipaddress.IPv4Address):
-                raise ValueError("IPv4 only")
-        except ValueError:
-            return {"ok": False, "output": f"Invalid IPv4 address: {target}", "events": []}
+            return {"ok": False, "output": "Usage: ping <IPv4 address or domain>\nExamples: ping 192.168.1.11, ping 8.8.8.8, ping google.com", "events": []}
+        target_raw = args[0].strip()
         if not src["online"]:
             return {"ok": False, "output": f"Request could not be sent: {source} is offline.", "events": []}
-        target_name, host = host_by_ip(target)
+
+        target = target_raw
+        try:
+            parsed_target = ipaddress.ip_address(target_raw)
+            if not isinstance(parsed_target, ipaddress.IPv4Address):
+                return {"ok": False, "output": f"Invalid IPv4 address: {target_raw}", "events": []}
+        except ValueError:
+            domain_key = target_raw.lower().rstrip(".")
+            if not STATE["dns_running"]:
+                events.append({"time": stamp, "title": "DNS failure", "detail": f"DNS service is stopped; cannot resolve {domain_key}", "kind": "error"})
+                return {"ok": False, "output": f"Ping request could not find host {target_raw}. Please check the name and try again (DNS service is stopped).", "events": events}
+            if domain_key in DNS_RECORDS:
+                target = DNS_RECORDS[domain_key]
+                events.append({"time": stamp, "title": "DNS resolution", "detail": f"Resolved {domain_key} → {target}", "kind": "info"})
+            else:
+                return {"ok": False, "output": f"Ping request could not find host {target_raw}. Please check the name and try again.", "events": []}
+
         events.append({"time": stamp, "title": "Echo request created", "detail": f"{source} → {target}", "kind": "info"})
-        if host and host["online"] and (same_subnet(src["ip"], target, src["mask"]) or STATE["hosts"]["Router"]["online"]):
+        target_name, host = host_by_ip(target)
+
+        # 1. Local Subnet Check
+        if same_subnet(src["ip"], target, src["mask"]):
+            if host and host["online"]:
+                events.extend([
+                    {"time": stamp, "title": "ARP lookup", "detail": f"Resolved {target} to {host['mac']}", "kind": "success"},
+                    {"time": stamp, "title": "ICMP echo reply", "detail": f"Reply received from {target_name} ({target})", "kind": "success"},
+                ])
+                output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nReply from {target}: bytes=32 time=2ms TTL=64\nReply from {target}: bytes=32 time=1ms TTL=64\nReply from {target}: bytes=32 time=2ms TTL=64\nReply from {target}: bytes=32 time=1ms TTL=64\n\nPing statistics for {target}:\n    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)\nApproximate round trip times: Minimum = 1ms, Maximum = 2ms, Average = 1ms\n\nSIMULATION: local host is reachable on subnet {src['ip']}/{src['mask']}."
+                return {"ok": True, "output": output, "events": events, "highlight": [source, target_name]}
+            elif host and not host["online"]:
+                events.append({"time": stamp, "title": "Host unreachable", "detail": f"Local host {target_name} ({target}) is powered offline", "kind": "error"})
+                output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nDestination host unreachable.\nDestination host unreachable.\n\nPing statistics for {target}:\n    Packets: Sent = 2, Received = 0, Lost = 2 (100% loss)\n\nSIMULATION: target device ({target_name}) is on local subnet but currently offline."
+                return {"ok": False, "output": output, "events": events}
+            else:
+                events.append({"time": stamp, "title": "ARP timeout", "detail": f"No response to ARP broadcast for {target}", "kind": "error"})
+                output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nDestination host unreachable.\nDestination host unreachable.\n\nPing statistics for {target}:\n    Packets: Sent = 2, Received = 0, Lost = 2 (100% loss)\n\nSIMULATION: no device on local subnet {src['ip']}/{src['mask']} uses this address."
+                return {"ok": False, "output": output, "events": events}
+
+        # 2. Remote / WAN Subnet Check (routes via Default Gateway)
+        router = STATE["hosts"]["Router"]
+        if router["online"]:
             events.extend([
-                {"time": stamp, "title": "ARP lookup", "detail": f"Resolved {target} to {host['mac']}", "kind": "success"},
-                {"time": stamp, "title": "ICMP echo reply", "detail": f"Reply received from {target_name} ({target})", "kind": "success"},
+                {"time": stamp, "title": "Default gateway lookup", "detail": f"Route non-local target {target} via {router['ip']} (Router)", "kind": "info"},
+                {"time": stamp, "title": "ICMP echo reply", "detail": f"Reply received from {target} (WAN latency ~13ms, TTL 117)", "kind": "success"},
             ])
-            output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nReply from {target}: bytes=32 time=2ms TTL=64\nReply from {target}: bytes=32 time=1ms TTL=64\nReply from {target}: bytes=32 time=2ms TTL=64\nReply from {target}: bytes=32 time=1ms TTL=64\n\nPing statistics for {target}:\n    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)\nApproximate round trip times: Minimum = 1ms, Maximum = 2ms, Average = 1ms\n\nSIMULATION: host is reachable in the configured lab topology."
-            return {"ok": True, "output": output, "events": events, "highlight": [source, target_name]}
-        events.append({"time": stamp, "title": "Destination unreachable", "detail": f"No online lab host is configured at {target}", "kind": "error"})
-        output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nDestination host unreachable.\nDestination host unreachable.\n\nPing statistics for {target}:\n    Packets: Sent = 2, Received = 0, Lost = 2 (100% loss)\n\nSIMULATION: no online lab host uses this address."
-        return {"ok": False, "output": output, "events": events}
+            output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nReply from {target}: bytes=32 time=14ms TTL=117\nReply from {target}: bytes=32 time=12ms TTL=117\nReply from {target}: bytes=32 time=15ms TTL=117\nReply from {target}: bytes=32 time=13ms TTL=117\n\nPing statistics for {target}:\n    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)\nApproximate round trip times: Minimum = 12ms, Maximum = 15ms, Average = 13ms\n\nSIMULATION: routed via default gateway ({router['ip']}) to external network host."
+            return {"ok": True, "output": output, "events": events, "highlight": [source, "Router"]}
+        else:
+            events.append({"time": stamp, "title": "Gateway unreachable", "detail": f"Default gateway {router['ip']} is offline", "kind": "error"})
+            output = f"Pinging {target} from {src['ip']} with 32 bytes of data:\nDestination host unreachable.\nDestination host unreachable.\n\nPing statistics for {target}:\n    Packets: Sent = 2, Received = 0, Lost = 2 (100% loss)\n\nSIMULATION: target is outside local subnet, but default gateway ({router['ip']}) is offline."
+            return {"ok": False, "output": output, "events": events}
 
     if name in {"ipconfig", "ifconfig"}:
         output = line_block(f"Ethernet adapter {source}:", [
@@ -117,7 +153,7 @@ def handle_command(raw_command: str, source: str = "PC1"):
 
     if name in {"tracert", "traceroute"}:
         if len(args) != 1:
-            return {"ok": False, "output": "Usage: tracert <IPv4 address>\nTry: tracert 203.0.113.25", "events": []}
+            return {"ok": False, "output": "Usage: tracert <IPv4 address>\nTry: tracert 203.0.113.25 or tracert 8.8.8.8", "events": []}
         target = args[0]
         try:
             parsed_target = ipaddress.ip_address(target)
@@ -125,13 +161,18 @@ def handle_command(raw_command: str, source: str = "PC1"):
                 raise ValueError("IPv4 only")
         except ValueError:
             return {"ok": False, "output": f"Invalid IPv4 address: {target}", "events": []}
+        router = STATE["hosts"]["Router"]
+        if not router["online"]:
+            events.append({"time": stamp, "title": "Gateway unreachable", "detail": f"Default gateway {router['ip']} is offline", "kind": "error"})
+            output = f"Tracing route to {target} over a maximum of 8 hops\n\n  1     *        *        *     Request timed out.\n\nTrace stopped: default gateway ({router['ip']}) is offline.\nSIMULATION: packets cannot leave local subnet when router is offline."
+            return {"ok": False, "output": output, "events": events}
         events = [
-            {"time": stamp, "title": "TTL = 1", "detail": f"First hop: {STATE['hosts']['Router']['ip']}", "kind": "success"},
+            {"time": stamp, "title": "TTL = 1", "detail": f"First hop: {router['ip']} (Default gateway)", "kind": "success"},
             {"time": stamp, "title": "TTL = 2", "detail": "Sample upstream router: 198.51.100.1", "kind": "info"},
             {"time": stamp, "title": "Destination", "detail": f"Reached simulated destination {target}", "kind": "success"},
         ]
-        output = f"Tracing route to {target} over a maximum of 8 hops\n\n  1     1 ms     1 ms     2 ms  {STATE['hosts']['Router']['ip']}\n  2     8 ms     9 ms     8 ms  198.51.100.1\n  3    18 ms    17 ms    19 ms  {target}\n\nTrace complete.\nSIMULATION: hop addresses and timings are illustrative."
-        return {"ok": True, "output": output, "events": events}
+        output = f"Tracing route to {target} over a maximum of 8 hops\n\n  1     1 ms     1 ms     2 ms  {router['ip']}\n  2     8 ms     9 ms     8 ms  198.51.100.1\n  3    18 ms    17 ms    19 ms  {target}\n\nTrace complete.\nSIMULATION: routed across hops via default gateway {router['ip']}."
+        return {"ok": True, "output": output, "events": events, "highlight": [source, "Router"]}
 
     if name == "nslookup":
         if len(args) != 1:

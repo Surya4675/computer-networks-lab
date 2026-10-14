@@ -23,10 +23,8 @@ computer-networks-lab/
 │   │   └── styles.css      # Academic lab styling, presentation layout & themes
 │   └── js/
 │       └── app.js          # Interactive UI logic, topology rendering & controls
-├── templates/
-│   └── index.html          # Semantic HTML5 single-page application template
-└── tests/
-    └── test_simulator.py   # Unit test suite for simulator endpoints & models
+└── templates/
+    └── index.html          # Semantic HTML5 single-page application template
 ```
 
 ---
@@ -77,17 +75,6 @@ python app.py
 
 Open **http://127.0.0.1:5000** in your browser. Press `Ctrl + C` in the terminal to stop the server.
 
----
-
-## Running Automated Tests
-
-Run the included unit test suite using Python's built-in `unittest` runner:
-
-```bash
-python -m unittest discover tests
-```
-
-Tests validate command parsing, unreachable host handling, unknown command isolation, duplicate IP rejection, server toggle states, protocol sequence generations, state retrieval, and full system reset.
 
 ---
 

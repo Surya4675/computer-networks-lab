@@ -47,7 +47,9 @@ computer-networks-lab/
 ├── package.json              # Node test configuration (no runtime deps)
 ├── conftest.py               # Makes the repo importable for pytest
 ├── Procfile                  # Render/Heroku WSGI config
-├── render.yaml               # Render blueprint
+├── Dockerfile                # Container with the real diagnostics installed
+├── .dockerignore
+├── render.yaml               # Render blueprint (Docker runtime)
 ├── run_windows.bat           # One-click Windows launcher
 ├── README.md
 ├── static/
@@ -152,13 +154,23 @@ npm test          # or: node --test "tests/js/*.test.js"
 
 ## Deployment (Render)
 
-- **Procfile / render.yaml:** `gunicorn app:app --workers 1 --threads 4`.
-- **Port:** `app.py` binds to `os.environ.get("PORT", 5000)` on `0.0.0.0`.
+The app is deployed as a **Docker** service, because the real diagnostics
+(`ping`, `traceroute`, `ip`/`ifconfig`, `arp`, `route`, `netstat`, `nslookup`,
+`curl`) are OS packages that Render's native runtimes do not provide.
 
-> On the Render free Linux container some utilities (for example `traceroute`)
-> may be absent or blocked at the network level. NetLab reports a clear message
-> instead of failing silently; `ping`/`traceroute` may also need elevated host
-> capabilities.
+- **`Dockerfile`:** `python:3.12-slim-bookworm` plus `iputils-ping`, `traceroute`,
+  `iproute2`, `net-tools`, `dnsutils` and `curl`.
+- **`render.yaml`:** `runtime: docker` with `dockerfilePath: ./Dockerfile`.
+- **Port:** the container binds `gunicorn` to `0.0.0.0:${PORT:-10000}` and Flask
+  reads `os.environ.get("PORT", 5000)` locally.
+- **Capabilities:** the container runs as root and Docker grants `CAP_NET_RAW`,
+  so the raw-socket `ping`/`traceroute` commands work. If a host ever drops that
+  capability, NetLab reports the failure instead of hanging.
+
+> Changing an existing Render service from the native Python runtime to Docker is
+> not an in-place change — delete the old `cnlab` service (or recreate the
+> Blueprint) so it rebuilds from the `Dockerfile`.
+
 
 ---
 

@@ -1,8 +1,7 @@
 services:
   - type: web
     name: cnlab
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 120
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     autoDeploy: true

@@ -1,9 +1,37 @@
-# Computer Networks Interactive Lab (NetLab)
+# NetLab — Computer Networks Interactive Lab
 
-A classroom-ready web application combining interactive presentation content and a Python-powered network simulator. The interface features a clean, high-contrast academic technical-lab design with dedicated presentation tools, live topology modeling, protocol event timelines, and diagnostic network commands.
+A Material Design (Material 3 / `@material/web`) teaching lab for computer
+networks. The command console runs **real, allow-listed diagnostics on the host
+that serves the application**, while the LAN, protocol and routing modules
+provide guided conceptual models for topics that cannot safely be exercised on a
+shared machine.
 
-🌐 **Live Deployment:** [https://computer-networks-lab.onrender.com](https://computer-networks-lab.onrender.com)  
+🌐 **Live Deployment:** [https://computer-networks-lab.onrender.com](https://computer-networks-lab.onrender.com)
 📦 **GitHub Repository:** [https://github.com/Surya4675/computer-networks-lab](https://github.com/Surya4675/computer-networks-lab)
+
+---
+
+## How commands work
+
+The console is not a simulator. Typing `ping 1.1.1.1` runs the real `ping`
+binary on the server and streams its actual output back to the browser.
+
+### Security model (`executor.py`)
+
+- **Allow-list only.** Only the commands in `executor.REGISTRY` can run. Anything
+  else is refused before a process is created.
+- **Validated arguments.** Hosts, counts and URLs are checked against strict
+  patterns; a host can never start with `-`, so flags cannot be injected.
+- **No shell.** Commands are executed with `subprocess.run(argv, shell=False)`,
+  so shell metacharacters are inert.
+- **Bounded.** Every command has a timeout and its output is size-capped.
+- **Cross-platform.** Windows and Linux/macOS map to the appropriate binaries
+  (`ipconfig`↔`ip addr`, `tracert`↔`traceroute`, `netstat`↔`ss`, and so on).
+- **Deliberately disabled.** `dhcp renew` would reconfigure the host's own
+  interface, so it is refused with an explanation.
+
+Real commands: `ping`, `ipconfig`, `tracert`, `nslookup`, `arp -a`,
+`route print`, `netstat`, `curl`, `help`.
 
 ---
 
@@ -11,111 +39,132 @@ A classroom-ready web application combining interactive presentation content and
 
 ```text
 computer-networks-lab/
-├── app.py                  # Core Flask backend & Python simulation engine
-├── requirements.txt        # Python production dependencies (Flask, Gunicorn)
-├── Procfile                # WSGI process configuration for Render/cloud deployment
-├── render.yaml             # Render infrastructure blueprint (auto-deploy spec)
-├── run_windows.bat         # One-click Windows local launcher script
-├── README.md               # Project documentation and usage guide
-├── .gitignore              # Git ignore rules for virtualenvs, caches, and OS files
+├── app.py                    # Flask app: real-exec API + teaching-model API
+├── executor.py               # Allow-listed, sandboxed real command engine
+├── requirements.txt          # Runtime deps (Flask, gunicorn)
+├── requirements-dev.txt      # Dev deps (pytest)
+├── pytest.ini                # pytest configuration
+├── package.json              # Node test configuration (no runtime deps)
+├── conftest.py               # Makes the repo importable for pytest
+├── Procfile                  # Render/Heroku WSGI config
+├── render.yaml               # Render blueprint
+├── run_windows.bat           # One-click Windows launcher
+├── README.md
 ├── static/
-│   ├── css/
-│   │   └── styles.css      # Academic lab styling, presentation layout & themes
+│   ├── css/styles.css        # Material 3 theme tokens + layout
 │   └── js/
-│       └── app.js          # Interactive UI logic, topology rendering & controls
-└── templates/
-    └── index.html          # Semantic HTML5 single-page application template
+│       ├── app.js            # UI logic (Material Web Components)
+│       └── lib.js            # Pure helpers (unit-tested)
+├── templates/index.html      # Material 3 single-page template
+└── tests/
+    ├── test_api.py           # Flask endpoint tests
+    ├── test_executor.py      # Executor tests
+    └── js/lib.test.js        # Front-end logic tests (node --test)
 ```
 
 ---
 
 ## Features
 
-- **Topic-Led Presentation:** Interactive modules covering network commands, protocols, LAN architecture, server setup, and routing.
-- **Dedicated Presentation Mode:** Fullscreen-ready slide navigation with previous/next controls, keyboard navigation (`←`/`→`, `PageUp`/`PageDown`), and side-by-side interactive console.
-- **Python-Backed Console:** Secure in-app command runner with allowlisted diagnostic utilities (`ping`, `ipconfig`, `tracert`, `nslookup`, `arp -a`, `route print`, `netstat`, `curl`, `dhcp renew`, and `help`).
-- **Interactive LAN Topology:** Click hosts to assign command source, edit IPv4 addresses, and toggle devices online/offline with real-time SVG link highlights.
-- **Protocol Flow Demonstrations:** Step-by-step event sequences for TCP (3-way handshake), UDP (datagrams), HTTP (GET request/response), DNS (resolution), DHCP (DORA), and ARP.
-- **Server & DNS Service Toggles:** Test realistic client-side failures by toggling web port 8080 or DNS resolution on and off.
-- **IPv4 Routing & Trace Route:** Interactive routing table and multi-hop traceroute simulation toward remote destinations.
-- **Knowledge Check Quiz:** 4-question interactive recap with immediate feedback, scoring, and explanation.
+- **Material 3 interface** built on Google's official `@material/web` components
+  (buttons, text fields, selects, switches, tabs, chips, radio, progress,
+  snackbar) themed with `--md-sys-color-*` tokens.
+- **Real diagnostics console** with command history, quick-command chips, a
+  session log and streamed host output.
+- **Protocol models** for TCP, UDP, HTTP, DNS, DHCP and ARP.
+- **Interactive LAN model** with editable IPv4 addresses, device on/off switches
+  and a live SVG topology.
+- **Server checks** that run real `curl` and `nslookup` against a URL or name.
+- **Routing** that runs the real routing table command and a real traceroute.
+- **Knowledge-check quiz** with immediate feedback and scoring.
+- **Classroom presentation mode** (Start/Stop, previous/next topic, hide console).
 
 ---
 
 ## Requirements
 
 - Python 3.10+
-- Dependencies listed in `requirements.txt`:
-  - `Flask>=3.0,<4.0`
-  - `gunicorn>=21.2.0`
+- `Flask>=3.0,<4.0` and `gunicorn>=21.2.0` (see `requirements.txt`)
+- Node.js 20+ (only for running the front-end tests)
+
+The browser loads `@material/web` from a CDN, so no build step or `npm install`
+is required.
 
 ---
 
-## How to Run Locally
+## Run locally
 
-### Option A: One-Click Launcher (Windows)
-Double-click `run_windows.bat` in the project root folder. It checks dependencies, starts the Flask server, and automatically opens `http://127.0.0.1:5000` in your default browser.
+### Option A — one-click (Windows)
+Double-click `run_windows.bat`. It checks dependencies, starts Flask and opens
+`http://127.0.0.1:5000`.
 
-### Option B: PowerShell / Terminal
+### Option B — terminal
 
 ```powershell
-# 1. Navigate to the project directory
-cd computer-networks-lab
-
-# 2. Create and activate a virtual environment
 python -m venv .venv
-.venv\Scripts\Activate.ps1    # On Linux/macOS: source .venv/bin/activate
-
-# 3. Install dependencies
+.venv\Scripts\Activate.ps1          # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
-
-# 4. Start the application
 python app.py
 ```
 
-Open **http://127.0.0.1:5000** in your browser. Press `Ctrl + C` in the terminal to stop the server.
-
-
----
-
-## Classroom Presentation Mode Controls
-
-- **Start / Exit Presentation:** Click the `📺 Start Presentation` button in the top navigation bar or press `P`.
-- **Next Topic:** Press `→` (Right Arrow) or `PageDown`.
-- **Previous Topic:** Press `←` (Left Arrow) or `PageUp`.
-- **Show / Hide Live Console:** Press `C` while presenting to toggle between side-by-side live demonstration and full-slide views.
-- **Exit Presentation:** Press `Esc` or click `Exit Presentation ✕`.
+Open **http://127.0.0.1:5000**.
 
 ---
 
-## Console Command Reference
+## Tests
 
-| Command | Category | Description |
+Backend (pytest):
+
+```powershell
+pip install -r requirements-dev.txt
+pytest
+```
+
+Front-end logic (Node's built-in runner, no dependencies):
+
+```powershell
+npm test          # or: node --test "tests/js/*.test.js"
+```
+
+---
+
+## API
+
+| Method | Path | Purpose |
 | :--- | :--- | :--- |
-| `ping <ip>` | Connectivity | Sends ICMP echo requests and reports reachability and round-trip times. |
-| `ipconfig` | Configuration | Displays local IP address, subnet mask, default gateway, and status. |
-| `nslookup <domain>` | DNS | Resolves local and sample domain names using the simulated DNS table. |
-| `tracert <ip>` | Routing | Simulates router hops and latency toward the destination IP. |
-| `arp -a` | Data Link | Displays the local Address Resolution Protocol IP-to-MAC mapping cache. |
-| `route print` | Network Layer | Prints the active IPv4 routing table for the selected host. |
-| `netstat` | Transport | Displays example active TCP and UDP connection states. |
-| `curl <url>` | Application | Issues a simulated HTTP GET request to the local web server on port 8080. |
-| `dhcp renew` | Configuration | Simulates the 4-part DORA exchange for dynamic address assignment. |
-| `help` | Reference | Lists all supported simulator commands. |
-| `clear` | Terminal | Clears the terminal output buffer. |
+| `GET` | `/api/host` | Host name, OS and Python version of the lab host. |
+| `GET` | `/api/commands` | The allow-listed command reference. |
+| `POST` | `/api/execute` | Run one allow-listed command for real. |
+| `GET` | `/api/state` | The LAN teaching model. |
+| `POST` | `/api/device` | Update a device in the LAN model. |
+| `POST` | `/api/simulate` | Step a protocol model (TCP/UDP/HTTP/DNS/DHCP/ARP). |
+| `POST` | `/api/reset` | Reset the LAN model. |
 
 ---
 
-## Deployment Configuration (Render)
+## Presentation mode
 
-This project is configured for one-click continuous deployment on Render:
-
-- **Procfile:** Declares `web: gunicorn app:app` for production WSGI serving.
-- **render.yaml:** Declares the Python runtime environment, build command (`pip install -r requirements.txt`), and auto-deploy settings.
-- **Port Handling:** `app.py` dynamically binds to `os.environ.get("PORT", 5000)` and listens on `0.0.0.0`.
+- **Start / exit:** the `Start Presentation` button, or press `P` / `Esc`.
+- **Next / previous:** `→` / `←`, or `PageDown` / `PageUp`.
+- **Show / hide console:** press `C`.
 
 ---
 
-## Important Simulation Note
+## Deployment (Render)
 
-This application is designed specifically for academic and educational demonstrations. The command parser is written in pure Python and never delegates commands to the operating system shell. Output timings, packet traces, and connection records are deterministic teaching models. No real network packets are transmitted.
+- **Procfile / render.yaml:** `gunicorn app:app --workers 1 --threads 4`.
+- **Port:** `app.py` binds to `os.environ.get("PORT", 5000)` on `0.0.0.0`.
+
+> On the Render free Linux container some utilities (for example `traceroute`)
+> may be absent or blocked at the network level. NetLab reports a clear message
+> instead of failing silently; `ping`/`traceroute` may also need elevated host
+> capabilities.
+
+---
+
+## Safety note
+
+Only the fixed, read-only diagnostics listed above can run, with validated
+arguments, no shell and a timeout. The LAN and protocol modules are conscious
+teaching models — they are labelled as such in the interface and never touch the
+host network.

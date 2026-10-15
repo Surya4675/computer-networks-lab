@@ -1,0 +1,10 @@
+{
+  "name": "computer-networks-lab",
+  "version": "2.0.0",
+  "private": true,
+  "description": "NetLab — Material Design computer networks lab with real allow-listed host diagnostics.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"tests/js/*.test.js\""
+  }
+}

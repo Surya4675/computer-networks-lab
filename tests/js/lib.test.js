@@ -10,6 +10,10 @@ import {
   kindClass,
   quizFeedback,
   summarizeHosts,
+  formatHexDump,
+  filterPackets,
+  formatWiresharkAsciiTable,
+  getProtocolColorClass,
 } from '../../static/js/lib.js';
 
 test('escapeHtml neutralises markup', () => {
@@ -98,3 +102,62 @@ test('summarizeHosts counts online devices', () => {
   const summary = summarizeHosts({ a: { online: true }, b: { online: false }, c: { online: true } });
   assert.deepEqual(summary, { total: 3, online: 2, label: '2 of 3 devices online' });
 });
+
+test('formatHexDump produces 16-byte lines with offset and ascii', () => {
+  const hex = '48656c6c6f20576f726c6421'; // "Hello World!" (12 bytes)
+  const dumped = formatHexDump(hex);
+  assert.match(dumped, /^0000\s+/);
+  assert.match(dumped, /48 65 6c 6c 6f 20 57 6f/);
+  assert.match(dumped, /Hello World!/);
+  assert.equal(formatHexDump(''), '');
+});
+
+test('filterPackets filters by SYN, SYN-ACK, ACK, and protocol', () => {
+  const packets = [
+    { no: 1, protocol: 'TCP', stage: 'SYN', info: '54321 → 80 [SYN] Seq=0', source: '192.168.1.10', destination: '192.168.1.100' },
+    { no: 2, protocol: 'TCP', stage: 'SYN-ACK', info: '80 → 54321 [SYN, ACK] Seq=0 Ack=1', source: '192.168.1.100', destination: '192.168.1.10' },
+    { no: 3, protocol: 'TCP', stage: 'ACK', info: '54321 → 80 [ACK] Seq=1 Ack=1', source: '192.168.1.10', destination: '192.168.1.100' },
+    { no: 4, protocol: 'UDP', stage: 'Datagram', info: '9999 → 51234 Len=20', source: '192.168.1.10', destination: '192.168.1.100' },
+  ];
+
+  assert.equal(filterPackets(packets, 'all').length, 4);
+  assert.equal(filterPackets(packets, '').length, 4);
+
+  const syns = filterPackets(packets, 'syn');
+  assert.equal(syns.length, 1);
+  assert.equal(syns[0].stage, 'SYN');
+
+  const synacks = filterPackets(packets, 'syn-ack');
+  assert.equal(synacks.length, 1);
+  assert.equal(synacks[0].stage, 'SYN-ACK');
+
+  const acks = filterPackets(packets, 'ack');
+  assert.equal(acks.length, 1);
+  assert.equal(acks[0].stage, 'ACK');
+
+  const udps = filterPackets(packets, 'udp');
+  assert.equal(udps.length, 1);
+  assert.equal(udps[0].protocol, 'UDP');
+});
+
+test('formatWiresharkAsciiTable outputs headers and rows', () => {
+  const packets = [
+    { no: 1, time: '0.000000', source: '192.168.1.10', destination: '192.168.1.100', protocol: 'TCP', length: 74, info: '[SYN]' },
+  ];
+  const table = formatWiresharkAsciiTable(packets, 'TCP 3-Way Handshake');
+  assert.match(table, /\[Wireshark Packet Capture\] TCP 3-Way Handshake/);
+  assert.match(table, /No\.\s+Time\s+Source/);
+  assert.match(table, /1\s+0\.000000\s+192\.168\.1\.10/);
+});
+
+test('getProtocolColorClass returns correct Wireshark classes', () => {
+  assert.equal(getProtocolColorClass('TCP', '[SYN]', 'SYN'), 'ws-tcp-syn');
+  assert.equal(getProtocolColorClass('TCP', '[SYN, ACK]', 'SYN-ACK'), 'ws-tcp-synack');
+  assert.equal(getProtocolColorClass('TCP', '[ACK]', 'ACK'), 'ws-tcp-ack');
+  assert.equal(getProtocolColorClass('UDP'), 'ws-udp');
+  assert.equal(getProtocolColorClass('HTTP'), 'ws-http');
+  assert.equal(getProtocolColorClass('DNS'), 'ws-dns');
+  assert.equal(getProtocolColorClass('DHCP'), 'ws-dhcp');
+  assert.equal(getProtocolColorClass('ARP'), 'ws-arp');
+});
+

@@ -139,9 +139,34 @@ def test_reset_restores_defaults(client):
 def test_simulate_known_scenarios(client, scenario):
     response = client.post("/api/simulate", json={"scenario": scenario})
     assert response.status_code == 200
-    assert response.get_json()["events"]
+    body = response.get_json()
+    assert body["events"]
+    assert body["packets"]
+    if scenario == "tcp":
+        stages = [p["stage"] for p in body["packets"]]
+        assert "SYN" in stages
+        assert "SYN-ACK" in stages
+        assert "ACK" in stages
 
 
 def test_simulate_unknown_scenario(client):
     response = client.post("/api/simulate", json={"scenario": "nope"})
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("action", ["syn", "synack", "ack", "data", "fin", "rst", "udp", "dns_query", "arp_request"])
+def test_packet_action_endpoints(client, action):
+    response = client.post("/api/packet_action", json={"action": action, "params": {"data": "Test Payload"}})
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["ok"] is True
+    assert "packet" in body
+    pkt = body["packet"]
+    assert pkt["no"] >= 1
+    assert pkt["protocol"] in ("TCP", "UDP", "DNS", "ARP")
+
+
+def test_probe_tcp_invalid_port(client):
+    response = client.post("/api/probe_tcp", json={"port": 999999})
+    assert response.status_code == 400
+

@@ -9,6 +9,10 @@ import {
   kindClass,
   quizFeedback,
   summarizeHosts,
+  formatHexDump,
+  filterPackets,
+  formatWiresharkAsciiTable,
+  getProtocolColorClass,
 } from './lib.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -231,6 +235,54 @@ async function runCommand(raw) {
   const command = String(raw ?? '').trim();
   if (!command) return null;
   if (command.toLowerCase() === 'clear') { clearTerminal(); return null; }
+
+  const lower = command.toLowerCase();
+  if (lower.startsWith('model tcp ') && lower.replace('model tcp ', '').trim().length) {
+    const act = lower.replace('model tcp ', '').trim();
+    currentProtocol = 'tcp';
+    renderProtocol();
+    commandHistory = pushHistory(commandHistory, command);
+    historyIndex = commandHistory.length;
+    if ($('#terminal-input')) $('#terminal-input').value = '';
+    addSession(command, true);
+    if (act === 'syn') triggerPacketAction('syn');
+    else if (act === 'synack' || act === 'syn-ack') triggerPacketAction('synack');
+    else if (act === 'ack') triggerPacketAction('ack');
+    else if (act.startsWith('data')) {
+      const payload = command.slice(command.indexOf('data') + 4).trim() || 'GET / HTTP/1.1';
+      triggerPacketAction('data', { data: payload });
+    } else if (act === 'fin') triggerPacketAction('fin');
+    else if (act === 'rst') triggerPacketAction('rst');
+    else if (act === 'probe') runRealProbe();
+    else if (act === 'loss' || act === 'retransmit') triggerPacketAction('retransmit');
+    else triggerPacketAction(act);
+    return { ok: true, output: `Executed interactive TCP action: ${act}` };
+  }
+
+  if (lower.startsWith('model ') || lower === 'wireshark' || lower.startsWith('wireshark ')) {
+    let target = 'tcp';
+    if (lower.startsWith('model ')) {
+      target = lower.replace('model ', '').trim();
+    } else if (lower.startsWith('wireshark ')) {
+      target = lower.replace('wireshark ', '').trim();
+    }
+    if (protocolData[target]) {
+      currentProtocol = target;
+      const protocolTabs = $('#protocol-tabs');
+      if (protocolTabs) {
+        protocolTabs.activeTabIndex = PROTOCOL_KEYS.indexOf(target);
+      }
+      renderProtocol();
+      commandHistory = pushHistory(commandHistory, command);
+      historyIndex = commandHistory.length;
+      const input = $('#terminal-input');
+      if (input) input.value = '';
+      addSession(command, true);
+      runProtocolSequence();
+      return { ok: true, output: `Starting Wireshark capture for ${target.toUpperCase()}…` };
+    }
+  }
+
   if (tokenize(command) === null) {
     writeTerminal('\nUnbalanced quotation marks in that command.\n');
     toast('Unbalanced quotation marks.');
@@ -414,11 +466,503 @@ async function loadState() {
 }
 
 // --------------------------------------------------------------------------- //
-// Protocols
+// Protocols & Wireshark Simulation
 // --------------------------------------------------------------------------- //
+let consoleMode = 'terminal';
+let currentPackets = [];
+let selectedPacketIndex = 0;
+let activeFilterQuery = '';
+let activeFilterChip = 'All';
+let isCapturing = false;
+
+function setConsoleMode(mode) {
+  consoleMode = mode;
+  const isWs = mode === 'wireshark';
+  const termBtn = $('#tab-btn-terminal');
+  const wsBtn = $('#tab-btn-wireshark');
+  const termOutput = $('#terminal-output');
+  const wsWindow = $('#wireshark-window');
+  const replayBtn = $('#btn-wireshark-replay');
+
+  if (termBtn) {
+    termBtn.classList.toggle('active', !isWs);
+    termBtn.setAttribute('aria-selected', String(!isWs));
+  }
+  if (wsBtn) {
+    wsBtn.classList.toggle('active', isWs);
+    wsBtn.setAttribute('aria-selected', String(isWs));
+  }
+  if (termOutput) termOutput.style.display = isWs ? 'none' : 'block';
+  if (wsWindow) wsWindow.style.display = isWs ? 'flex' : 'none';
+  if (replayBtn) replayBtn.style.display = isWs && currentPackets.length ? 'inline-flex' : 'none';
+
+  if (isWs && currentPackets.length) {
+    renderWiresharkTable();
+  }
+}
+
+function updateWiresharkBadge() {
+  const badge = $('#wireshark-badge');
+  if (badge) badge.textContent = `${currentPackets.length}`;
+}
+
+function renderWiresharkTable() {
+  const tbody = $('#ws-packet-tbody');
+  if (!tbody) return;
+  const filtered = filterPackets(currentPackets, activeFilterQuery);
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr class="ws-empty-row"><td colspan="7">${currentPackets.length ? 'No packets match filter "' + escapeHtml(activeFilterQuery) + '"' : 'No packet capture active. Click "Run model sequence" in Protocols or type "model tcp".'}</td></tr>`;
+    renderPacketInspection(-1);
+    updateStatusBar(0);
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((pkt) => {
+    const isSelected = pkt.no - 1 === selectedPacketIndex;
+    const colorClass = getProtocolColorClass(pkt.protocol, pkt.info, pkt.stage);
+    return `
+      <tr class="${colorClass} ${isSelected ? 'ws-selected' : ''}" data-packet-no="${pkt.no}">
+        <td class="ws-col-no">${pkt.no}</td>
+        <td class="ws-col-time">${escapeHtml(pkt.time)}</td>
+        <td class="ws-col-src" title="${escapeHtml(pkt.source)}">${escapeHtml(pkt.source)}</td>
+        <td class="ws-col-dst" title="${escapeHtml(pkt.destination)}">${escapeHtml(pkt.destination)}</td>
+        <td class="ws-col-proto">${escapeHtml(pkt.protocol)}</td>
+        <td class="ws-col-len">${pkt.length}</td>
+        <td class="ws-col-info" title="${escapeHtml(pkt.info)}">${escapeHtml(pkt.info)}</td>
+      </tr>`;
+  }).join('');
+
+  $$('#ws-packet-tbody tr[data-packet-no]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const pktNo = parseInt(row.getAttribute('data-packet-no'), 10);
+      selectWiresharkPacket(pktNo - 1);
+    });
+  });
+
+  updateStatusBar(filtered.length);
+
+  const currentlyVisible = filtered.some((p) => p.no - 1 === selectedPacketIndex);
+  if (!currentlyVisible && filtered.length) {
+    selectWiresharkPacket(filtered[0].no - 1);
+  } else {
+    renderPacketInspection(selectedPacketIndex);
+  }
+}
+
+function selectWiresharkPacket(index) {
+  if (index < 0 || index >= currentPackets.length) return;
+  selectedPacketIndex = index;
+  const pkt = currentPackets[index];
+
+  $$('#ws-packet-tbody tr').forEach((row) => {
+    const pktNo = parseInt(row.getAttribute('data-packet-no'), 10);
+    row.classList.toggle('ws-selected', pktNo - 1 === index);
+  });
+
+  $$('.timeline-step').forEach((step) => {
+    const stepIdx = parseInt(step.getAttribute('data-packet-index'), 10);
+    step.classList.toggle('active-step', stepIdx === index);
+  });
+
+  const summary = $('#ws-selected-summary');
+  if (summary) summary.textContent = `Packet #${pkt.no} (${pkt.protocol} ${pkt.stage || ''})`;
+
+  renderPacketInspection(index);
+
+  const statusSelection = $('#ws-status-selection');
+  if (statusSelection) statusSelection.textContent = `Packet #${pkt.no} selected · ${pkt.stage || pkt.protocol}`;
+}
+
+function renderPacketInspection(index) {
+  const treeContainer = $('#ws-tree');
+  const hexContainer = $('#ws-hex-dump');
+  if (!treeContainer || !hexContainer) return;
+
+  if (index < 0 || index >= currentPackets.length) {
+    treeContainer.innerHTML = '<p class="ws-empty-hint">Select a packet row above to inspect dissection tree.</p>';
+    hexContainer.textContent = 'No packet selected.';
+    return;
+  }
+
+  const pkt = currentPackets[index];
+
+  if (Array.isArray(pkt.layers) && pkt.layers.length) {
+    treeContainer.innerHTML = pkt.layers.map((layer, lIdx) => {
+      const isCollapsed = lIdx > 3;
+      const fields = (layer.fields || []).map((f) => {
+        const isHighlight = f.includes('Syn: Set') || f.includes('Acknowledgment: Set') || f.includes('ESTABLISHED');
+        return `<div class="ws-tree-field ${isHighlight ? 'highlight-flag' : ''}">${escapeHtml(f)}</div>`;
+      }).join('');
+      return `
+        <div class="ws-tree-node ${isCollapsed ? 'collapsed' : ''}">
+          <div class="ws-tree-header" role="button" tabindex="0">
+            <span class="ws-tree-triangle">▼</span>
+            <span>${escapeHtml(layer.name)}</span>
+          </div>
+          <div class="ws-tree-children">${fields}</div>
+        </div>`;
+    }).join('');
+
+    $$('.ws-tree-header', treeContainer).forEach((header) => {
+      header.addEventListener('click', () => {
+        header.closest('.ws-tree-node')?.classList.toggle('collapsed');
+      });
+    });
+  } else {
+    treeContainer.innerHTML = `<div class="ws-tree-node"><div class="ws-tree-header"><span>${escapeHtml(pkt.info)}</span></div><div class="ws-tree-children"><div class="ws-tree-field">${escapeHtml(pkt.summary || '')}</div></div></div>`;
+  }
+
+  hexContainer.textContent = formatHexDump(pkt.hex) || 'No raw payload available.';
+}
+
+function updateStatusBar(displayedCount) {
+  const countEl = $('#ws-status-count');
+  if (countEl) {
+    const total = currentPackets.length;
+    const pct = total ? Math.round((displayedCount / total) * 100) : 0;
+    countEl.textContent = `Packets: ${total} · Displayed: ${displayedCount} (${pct}%)`;
+  }
+}
+
+function setupFilterChips(scenario) {
+  const container = $('#ws-filter-chips');
+  if (!container) return;
+  const chipsConfig = {
+    tcp: ['All', 'SYN', 'SYN-ACK', 'ACK'],
+    udp: ['All', 'UDP', 'Datagram'],
+    http: ['All', 'DNS', 'TCP', 'HTTP'],
+    dns: ['All', 'Query', 'Response'],
+    dhcp: ['All', 'Discover', 'Offer', 'Request', 'ACK'],
+    arp: ['All', 'Request', 'Reply'],
+  };
+  const list = chipsConfig[scenario] || ['All'];
+  activeFilterChip = 'All';
+  activeFilterQuery = '';
+  const input = $('#ws-filter-input');
+  if (input) {
+    input.value = '';
+    input.closest('.ws-filter-input-wrap')?.classList.remove('invalid');
+  }
+
+  container.innerHTML = list.map((label) => `
+    <button type="button" class="ws-chip ${label === 'All' ? 'active' : ''}" data-filter="${escapeHtml(label)}">
+      ${escapeHtml(label)}
+    </button>`).join('');
+
+  $$('.ws-chip', container).forEach((chip) => {
+    chip.addEventListener('click', () => {
+      $$('.ws-chip', container).forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      const val = chip.getAttribute('data-filter');
+      activeFilterChip = val;
+      activeFilterQuery = val === 'All' ? '' : val;
+      if (input) input.value = activeFilterQuery;
+      renderWiresharkTable();
+    });
+  });
+}
+
+async function streamWiresharkCapture(packets, scenarioTitle) {
+  if (isCapturing) return;
+  isCapturing = true;
+  currentPackets = [];
+  selectedPacketIndex = 0;
+  updateWiresharkBadge();
+
+  const statusWrap = $('#ws-capture-status');
+  const statusText = $('#ws-capture-text');
+  const replayBtn = $('#btn-wireshark-replay');
+  if (replayBtn) replayBtn.disabled = true;
+  if (statusWrap) statusWrap.style.display = 'flex';
+
+  for (let i = 0; i < packets.length; i += 1) {
+    const pkt = packets[i];
+    if (statusText) statusText.textContent = `Capturing packet ${i + 1} of ${packets.length} (${pkt.stage || pkt.protocol})…`;
+    currentPackets.push(pkt);
+    updateWiresharkBadge();
+    renderWiresharkTable();
+    selectWiresharkPacket(i);
+    await delay(320);
+  }
+
+  if (statusWrap) statusWrap.style.display = 'none';
+  if (replayBtn) {
+    replayBtn.disabled = false;
+    replayBtn.style.display = 'inline-flex';
+  }
+  isCapturing = false;
+  selectWiresharkPacket(0);
+}
+
+// --------------------------------------------------------------------------- //
+// Real-Time Interactive Actions Engine
+// --------------------------------------------------------------------------- //
+const interactiveState = {
+  clientState: 'CLOSED',
+  serverState: 'LISTEN',
+  clientSeq: 1000,
+  serverSeq: 5000,
+  clientPort: 54321,
+  serverPort: 80,
+  startTime: null,
+  packetCount: 0,
+};
+
+function updateSocketUI() {
+  const clientChip = $('#sock-client-state');
+  const serverChip = $('#sock-server-state');
+  const linkInd = $('#socket-link-indicator');
+  const linkStatus = $('#sock-link-status');
+
+  const btnSyn = $('#act-send-syn');
+  const btnSynack = $('#act-send-synack');
+  const btnAck = $('#act-send-ack');
+  const btnData = $('#act-send-data');
+  const btnFin = $('#act-send-fin');
+  const btnRst = $('#act-send-rst');
+
+  const cState = interactiveState.clientState;
+  const sState = interactiveState.serverState;
+
+  if (clientChip) {
+    clientChip.textContent = cState;
+    clientChip.className = `state-chip state-${cState.toLowerCase().replace(/_/g, '-')}`;
+  }
+  if (serverChip) {
+    serverChip.textContent = sState;
+    serverChip.className = `state-chip state-${sState.toLowerCase().replace(/_/g, '-')}`;
+  }
+
+  const isConn = cState === 'ESTABLISHED' && sState === 'ESTABLISHED';
+  if (linkInd) linkInd.classList.toggle('connected', isConn);
+  if (linkStatus) {
+    linkStatus.textContent = isConn
+      ? 'ESTABLISHED'
+      : (cState === 'SYN_SENT' || sState === 'SYN_RCVD')
+        ? 'CONNECTING…'
+        : 'DISCONNECTED';
+  }
+
+  if (btnSyn) btnSyn.disabled = cState !== 'CLOSED';
+  if (btnSynack) btnSynack.disabled = !(cState === 'SYN_SENT' && (sState === 'LISTEN' || sState === 'SYN_RCVD'));
+  if (btnAck) btnAck.disabled = !(cState === 'SYN_SENT' && sState === 'SYN_RCVD');
+  if (btnData) btnData.disabled = !isConn;
+  if (btnFin) btnFin.disabled = !isConn;
+  if (btnRst) btnRst.disabled = cState === 'CLOSED' && sState === 'CLOSED';
+}
+
+function updateProtocolActionDeck() {
+  const p = currentProtocol;
+  const groupTcp = $('#actions-tcp');
+  const groupUdp = $('#actions-udp');
+  const groupDns = $('#actions-dns');
+  const groupDhcp = $('#actions-dhcp');
+  const groupArp = $('#actions-arp');
+
+  if (groupTcp) groupTcp.style.display = (p === 'tcp' || p === 'http') ? 'flex' : 'none';
+  if (groupUdp) groupUdp.style.display = p === 'udp' ? 'flex' : 'none';
+  if (groupDns) groupDns.style.display = p === 'dns' ? 'flex' : 'none';
+  if (groupDhcp) groupDhcp.style.display = p === 'dhcp' ? 'flex' : 'none';
+  if (groupArp) groupArp.style.display = p === 'arp' ? 'flex' : 'none';
+
+  updateSocketUI();
+}
+
+function appendTimelineStep(pkt) {
+  const timeline = $('#protocol-timeline');
+  if (!timeline) return;
+  const emptyP = timeline.querySelector('.empty');
+  if (emptyP) timeline.innerHTML = '';
+
+  const index = currentPackets.length - 1;
+  const stepEl = document.createElement('div');
+  stepEl.className = 'timeline-step client-step active-step';
+  stepEl.setAttribute('data-packet-index', String(index));
+  stepEl.setAttribute('title', `Click to inspect Packet #${pkt.no} (${pkt.stage || pkt.protocol}) in Wireshark`);
+  stepEl.innerHTML = `
+    <span class="timeline-index">${String(pkt.no).padStart(2, '0')}</span>
+    <div>
+      <strong>${escapeHtml(pkt.stage || pkt.protocol)} [${escapeHtml(pkt.source)} → ${escapeHtml(pkt.destination)}]</strong>
+      <p>${escapeHtml(pkt.info)}</p>
+    </div>
+  `;
+  stepEl.addEventListener('click', () => {
+    setConsoleMode('wireshark');
+    selectWiresharkPacket(index);
+  });
+
+  $$('.timeline-step', timeline).forEach((s) => s.classList.remove('active-step'));
+  timeline.appendChild(stepEl);
+}
+
+async function triggerPacketAction(actionName, customParams = {}) {
+  try {
+    if (!interactiveState.startTime) interactiveState.startTime = performance.now();
+    const relTime = ((performance.now() - interactiveState.startTime) / 1000).toFixed(6);
+    interactiveState.packetCount += 1;
+
+    const srcIp = (labState && labState.hosts && labState.hosts.PC1 && labState.hosts.PC1.ip) || '192.168.1.10';
+    const dstIp = (labState && labState.hosts && labState.hosts.Server && labState.hosts.Server.ip) || '192.168.1.100';
+
+    const params = {
+      src_ip: srcIp,
+      dst_ip: dstIp,
+      client_port: interactiveState.clientPort,
+      server_port: interactiveState.serverPort,
+      client_seq: interactiveState.clientSeq,
+      server_seq: interactiveState.serverSeq,
+      no: interactiveState.packetCount,
+      time: relTime,
+      data: $('#tcp-payload-input')?.value.trim() || 'GET / HTTP/1.1',
+      ...customParams,
+    };
+
+    const res = await api('/api/packet_action', { action: actionName, params });
+    if (!res || !res.packet) throw new Error('Failed to generate action packet.');
+    const pkt = res.packet;
+
+    // State machine updates
+    const autoReply = $('#chk-auto-respond')?.checked ?? true;
+
+    if (actionName === 'syn') {
+      interactiveState.clientState = 'SYN_SENT';
+      updateSocketUI();
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('synack'), 350);
+      }
+    } else if (actionName === 'synack') {
+      interactiveState.serverState = 'SYN_RCVD';
+      updateSocketUI();
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('ack'), 350);
+      }
+    } else if (actionName === 'ack') {
+      interactiveState.clientState = 'ESTABLISHED';
+      interactiveState.serverState = 'ESTABLISHED';
+      updateSocketUI();
+      toast('TCP Connection ESTABLISHED! Sockets connected.');
+    } else if (actionName === 'data') {
+      const dataLen = (new TextEncoder().encode(params.data)).length;
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('server_ack', { data_len: dataLen }), 350);
+      }
+    } else if (actionName === 'server_ack') {
+      interactiveState.clientSeq += params.data_len || 0;
+      toast('Server acknowledged data.');
+    } else if (actionName === 'fin') {
+      interactiveState.clientState = 'FIN_WAIT_1';
+      updateSocketUI();
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('server_fin'), 350);
+      }
+    } else if (actionName === 'server_fin') {
+      interactiveState.serverState = 'LAST_ACK';
+      updateSocketUI();
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('client_fin_ack'), 350);
+      }
+    } else if (actionName === 'client_fin_ack') {
+      interactiveState.clientState = 'CLOSED';
+      interactiveState.serverState = 'CLOSED';
+      updateSocketUI();
+      toast('TCP Gracefully Closed.');
+    } else if (actionName === 'rst') {
+      interactiveState.clientState = 'CLOSED';
+      interactiveState.serverState = 'CLOSED';
+      updateSocketUI();
+      toast('TCP Connection Aborted (RST).');
+    } else if (actionName === 'retransmit') {
+      toast('Simulated Packet Loss: TCP Retransmission captured.');
+    } else if (actionName === 'dns_query') {
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('dns_response', { name: params.name }), 350);
+      }
+    } else if (actionName === 'arp_request') {
+      if (autoReply) {
+        setTimeout(() => triggerPacketAction('arp_reply', { target_ip: params.target_ip }), 350);
+      }
+    }
+
+    // Append to current capture
+    currentPackets.push(pkt);
+    updateWiresharkBadge();
+    setConsoleMode('wireshark');
+    renderWiresharkTable();
+    selectWiresharkPacket(currentPackets.length - 1);
+    appendTimelineStep(pkt);
+
+    const tableWrap = $('.ws-packet-list-wrap');
+    if (tableWrap) tableWrap.scrollTop = tableWrap.scrollHeight;
+
+    return pkt;
+  } catch (err) {
+    toast(err.message || 'Action failed.');
+    console.error(err);
+  }
+}
+
+function resetInteractiveFlow() {
+  interactiveState.clientState = 'CLOSED';
+  interactiveState.serverState = 'LISTEN';
+  interactiveState.clientSeq = 1000;
+  interactiveState.serverSeq = 5000;
+  interactiveState.clientPort = 50000 + Math.floor(Math.random() * 15000);
+  interactiveState.startTime = null;
+  interactiveState.packetCount = 0;
+  currentPackets = [];
+  updateWiresharkBadge();
+  renderWiresharkTable();
+  updateSocketUI();
+  const timeline = $('#protocol-timeline');
+  if (timeline) timeline.innerHTML = '<p class="empty">Click action buttons above or Run sequence to reveal modelled steps.</p>';
+  toast('Socket states and capture reset.');
+}
+
+async function runRealProbe() {
+  try {
+    toast('Probing real host TCP socket on 127.0.0.1:5000…');
+    const res = await api('/api/probe_tcp', { host: '127.0.0.1', port: 5000 });
+    if (!res.ok) throw new Error(res.error || 'Probe failed');
+
+    if (!interactiveState.startTime) interactiveState.startTime = performance.now();
+    const relTime = ((performance.now() - interactiveState.startTime) / 1000).toFixed(6);
+    interactiveState.packetCount += 1;
+
+    const pkt = {
+      no: interactiveState.packetCount,
+      time: relTime,
+      source: `${res.client_ip}:${res.client_port}`,
+      destination: `${res.server_ip}:${res.server_port}`,
+      protocol: 'TCP',
+      length: 74,
+      info: `${res.client_port} → ${res.server_port} [SYN, ACK] Seq=1 Ack=1 RTT=${res.rtt_ms}ms (Real Host OS Kernel)`,
+      stage: 'REAL-PROBE',
+      summary: `Real Host OS Socket Probe: Connected to ${res.server_ip}:${res.server_port} in ${res.rtt_ms}ms. Ephemeral client port assigned by OS: ${res.client_port}.`,
+      layers: [
+        { name: `Frame ${interactiveState.packetCount}: 74 bytes on loopback`, fields: [`RTT: ${res.rtt_ms} ms`, 'Interface: Loopback (Real OS Socket)'] },
+        { name: `Internet Protocol Version 4, Src: ${res.client_ip}, Dst: ${res.server_ip}`, fields: ['Protocol: TCP (6)'] },
+        { name: `Transmission Control Protocol, Src Port: ${res.client_port}, Dst Port: ${res.server_port}`, fields: ['[TCP Connection: ESTABLISHED by Python socket.connect()]', `Measured Round-Trip Time: ${res.rtt_ms} ms`, `Client Ephemeral Port: ${res.client_port}`] },
+      ],
+      hex: '00000000000000000000000008004500003c0000400040067f007f0000017f000001' + res.client_port.toString(16).padStart(4, '0') + res.server_port.toString(16).padStart(4, '0') + '0000000100000001a012faf000000000',
+    };
+
+    currentPackets.push(pkt);
+    updateWiresharkBadge();
+    setConsoleMode('wireshark');
+    renderWiresharkTable();
+    selectWiresharkPacket(currentPackets.length - 1);
+    appendTimelineStep(pkt);
+    toast(`Real Host TCP Handshake succeeded! RTT: ${res.rtt_ms}ms`);
+  } catch (err) {
+    toast(`Real probe error: ${err.message}`);
+  }
+}
+
 function renderProtocol() {
   const data = protocolData[currentProtocol];
   if (!data) return;
+  setupFilterChips(data.scenario);
   const detail = $('#protocol-detail');
   if (detail) {
     detail.innerHTML = `
@@ -435,7 +979,9 @@ function renderProtocol() {
   if (title) title.textContent = data.title;
   if (description) description.textContent = data.description;
   const timeline = $('#protocol-timeline');
-  if (timeline) timeline.innerHTML = '<p class="empty">Run the sequence to reveal the modelled steps.</p>';
+  if (timeline) timeline.innerHTML = '<p class="empty">Click action buttons above or Run sequence to reveal modelled steps.</p>';
+
+  updateProtocolActionDeck();
 }
 
 async function runProtocolSequence() {
@@ -444,18 +990,44 @@ async function runProtocolSequence() {
   const button = $('#run-protocol');
   if (button) button.disabled = true;
   try {
-    const result = await api('/api/simulate', { scenario: data.scenario });
     switchView(2);
-    writeTerminal(`\n$ model ${data.scenario}\n`);
-    const timeline = $('#protocol-timeline');
-    if (timeline) {
-      timeline.innerHTML = (result.events || []).map((event, index) => `
-        <div class="timeline-step ${kindClass(event.kind)}">
-          <span class="timeline-index">${String(index + 1).padStart(2, '0')}</span>
-          <div><strong>${escapeHtml(event.title)}</strong><p>${escapeHtml(event.detail)}</p></div>
-        </div>`).join('') || '<p class="empty">No steps returned.</p>';
+    setConsoleMode('wireshark');
+    resetInteractiveFlow();
+
+    if (currentProtocol === 'tcp') {
+      // Step-by-step real-time interactive actions!
+      await triggerPacketAction('syn');
+      await delay(800);
+      await triggerPacketAction('data', { data: $('#tcp-payload-input')?.value.trim() || 'GET / HTTP/1.1' });
+      await delay(800);
+      await triggerPacketAction('fin');
+    } else if (currentProtocol === 'udp') {
+      const uPayload = $('#udp-payload-input')?.value.trim() || 'NetLab UDP Datagram';
+      await triggerPacketAction('udp', { payload: uPayload });
+      await delay(400);
+      await triggerPacketAction('udp', { payload: 'UDP Datagram #2 (Streaming)' });
+    } else if (currentProtocol === 'dns') {
+      const qName = $('#dns-query-input')?.value.trim() || 'example.com';
+      await triggerPacketAction('dns_query', { name: qName });
+    } else if (currentProtocol === 'dhcp') {
+      await triggerPacketAction('dhcp_discover');
+      await delay(400);
+      await triggerPacketAction('dhcp_offer');
+      await delay(400);
+      await triggerPacketAction('dhcp_request');
+      await delay(400);
+      await triggerPacketAction('dhcp_ack');
+    } else if (currentProtocol === 'arp') {
+      await triggerPacketAction('arp_request');
+      await delay(400);
+      await triggerPacketAction('arp_reply');
+    } else {
+      const result = await api('/api/simulate', { scenario: data.scenario });
+      if (Array.isArray(result.packets) && result.packets.length) {
+        await streamWiresharkCapture(result.packets, result.title);
+      }
     }
-    toast(`${data.badge} model sequence complete.`);
+    toast(`${data.badge} real-time interactive simulation complete.`);
   } catch (error) {
     toast(error.message || 'Could not run the sequence.');
   } finally {
@@ -583,6 +1155,61 @@ function attachHandlers() {
   $('#clear-terminal')?.addEventListener('click', clearTerminal);
   $('#clear-log')?.addEventListener('click', () => { sessionLog = []; renderSession(); });
 
+  // Console mode tabs (Terminal vs Wireshark)
+  $('#tab-btn-terminal')?.addEventListener('click', () => setConsoleMode('terminal'));
+  $('#tab-btn-wireshark')?.addEventListener('click', () => setConsoleMode('wireshark'));
+  $('#btn-wireshark-replay')?.addEventListener('click', () => {
+    const data = protocolData[currentProtocol];
+    if (data && currentPackets.length) {
+      streamWiresharkCapture([...currentPackets], data.title);
+    }
+  });
+
+  // Wireshark filter bar
+  const filterInput = $('#ws-filter-input');
+  filterInput?.addEventListener('input', (e) => {
+    activeFilterQuery = e.target.value;
+    renderWiresharkTable();
+  });
+  filterInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      activeFilterQuery = filterInput.value;
+      renderWiresharkTable();
+    }
+  });
+  $('#ws-filter-apply')?.addEventListener('click', () => {
+    if (filterInput) activeFilterQuery = filterInput.value;
+    renderWiresharkTable();
+  });
+  $('#ws-filter-clear')?.addEventListener('click', () => {
+    if (filterInput) filterInput.value = '';
+    activeFilterQuery = '';
+    $$('.ws-chip').forEach((c) => c.classList.toggle('active', c.getAttribute('data-filter') === 'All'));
+    renderWiresharkTable();
+  });
+
+  // Wireshark inspection sub-tabs
+  $('#ws-tab-details')?.addEventListener('click', () => {
+    $('#ws-tab-details')?.classList.add('active');
+    $('#ws-tab-details')?.setAttribute('aria-selected', 'true');
+    $('#ws-tab-hex')?.classList.remove('active');
+    $('#ws-tab-hex')?.setAttribute('aria-selected', 'false');
+    const dView = $('#ws-details-view');
+    const hView = $('#ws-hex-view');
+    if (dView) dView.style.display = 'block';
+    if (hView) hView.style.display = 'none';
+  });
+  $('#ws-tab-hex')?.addEventListener('click', () => {
+    $('#ws-tab-hex')?.classList.add('active');
+    $('#ws-tab-hex')?.setAttribute('aria-selected', 'true');
+    $('#ws-tab-details')?.classList.remove('active');
+    $('#ws-tab-details')?.setAttribute('aria-selected', 'false');
+    const dView = $('#ws-details-view');
+    const hView = $('#ws-hex-view');
+    if (dView) dView.style.display = 'none';
+    if (hView) hView.style.display = 'block';
+  });
+
   $('#presentation-mode')?.addEventListener('click', () => togglePresentationMode());
   $('#pres-prev-btn')?.addEventListener('click', prevTopic);
   $('#pres-next-btn')?.addEventListener('click', nextTopic);
@@ -593,6 +1220,59 @@ function attachHandlers() {
   $('#reset-device-config')?.addEventListener('click', resetModel);
   $('#refresh-commands')?.addEventListener('click', loadCommands);
   $('#run-protocol')?.addEventListener('click', runProtocolSequence);
+
+  // Real-Time Interactive Action Deck Listeners
+  $('#act-send-syn')?.addEventListener('click', () => triggerPacketAction('syn'));
+  $('#act-send-synack')?.addEventListener('click', () => triggerPacketAction('synack'));
+  $('#act-send-ack')?.addEventListener('click', () => triggerPacketAction('ack'));
+  $('#act-send-data')?.addEventListener('click', () => triggerPacketAction('data', { data: $('#tcp-payload-input')?.value.trim() || 'GET / HTTP/1.1' }));
+  $('#tcp-payload-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') triggerPacketAction('data', { data: $('#tcp-payload-input')?.value.trim() || 'GET / HTTP/1.1' });
+  });
+  $('#act-send-fin')?.addEventListener('click', () => triggerPacketAction('fin'));
+  $('#act-send-rst')?.addEventListener('click', () => triggerPacketAction('rst'));
+  $('#act-packet-loss')?.addEventListener('click', () => triggerPacketAction('retransmit'));
+  $('#act-real-probe')?.addEventListener('click', runRealProbe);
+  $('#act-reset-flow')?.addEventListener('click', resetInteractiveFlow);
+
+  // UDP actions
+  $('#act-send-udp')?.addEventListener('click', () => triggerPacketAction('udp', { payload: $('#udp-payload-input')?.value.trim() || 'NetLab UDP Datagram' }));
+  $('#udp-payload-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') triggerPacketAction('udp', { payload: $('#udp-payload-input')?.value.trim() || 'NetLab UDP Datagram' });
+  });
+  $('#act-blast-udp')?.addEventListener('click', async () => {
+    for (let i = 1; i <= 5; i += 1) {
+      await triggerPacketAction('udp', { payload: `UDP Blast #${i} (${new Date().toLocaleTimeString()})` });
+      await delay(130);
+    }
+  });
+
+  // DNS actions
+  $('#act-dns-query')?.addEventListener('click', () => triggerPacketAction('dns_query', { name: $('#dns-query-input')?.value.trim() || 'example.com' }));
+  $('#dns-query-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') triggerPacketAction('dns_query', { name: $('#dns-query-input')?.value.trim() || 'example.com' });
+  });
+  $('#act-dns-response')?.addEventListener('click', () => triggerPacketAction('dns_response', { name: $('#dns-query-input')?.value.trim() || 'example.com' }));
+
+  // DHCP actions
+  $('#act-dhcp-discover')?.addEventListener('click', () => triggerPacketAction('dhcp_discover'));
+  $('#act-dhcp-offer')?.addEventListener('click', () => triggerPacketAction('dhcp_offer'));
+  $('#act-dhcp-request')?.addEventListener('click', () => triggerPacketAction('dhcp_request'));
+  $('#act-dhcp-ack')?.addEventListener('click', () => triggerPacketAction('dhcp_ack'));
+
+  // ARP actions
+  $('#act-arp-request')?.addEventListener('click', () => triggerPacketAction('arp_request'));
+  $('#act-arp-reply')?.addEventListener('click', () => triggerPacketAction('arp_reply'));
+
+  // Wireshark Console Quick Actions Toolbar
+  $('#ws-quick-syn')?.addEventListener('click', () => triggerPacketAction('syn'));
+  $('#ws-quick-synack')?.addEventListener('click', () => triggerPacketAction('synack'));
+  $('#ws-quick-ack')?.addEventListener('click', () => triggerPacketAction('ack'));
+  $('#ws-quick-data')?.addEventListener('click', () => triggerPacketAction('data', { data: $('#tcp-payload-input')?.value.trim() || 'GET / HTTP/1.1' }));
+  $('#ws-quick-fin')?.addEventListener('click', () => triggerPacketAction('fin'));
+  $('#ws-quick-rst')?.addEventListener('click', () => triggerPacketAction('rst'));
+  $('#ws-quick-loss')?.addEventListener('click', () => triggerPacketAction('retransmit'));
+  $('#ws-quick-probe')?.addEventListener('click', runRealProbe);
 
   $('#run-http')?.addEventListener('click', () => runCommand(`curl ${$('#http-url').value.trim()}`));
   $('#run-dns')?.addEventListener('click', () => runCommand(`nslookup ${$('#dns-name').value.trim()}`));
@@ -608,6 +1288,20 @@ function attachHandlers() {
   window.addEventListener('keydown', (event) => {
     const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
     const typing = tag === 'input' || tag === 'textarea' || tag === 'md-outlined-text-field' || tag === 'md-filled-text-field';
+    if (consoleMode === 'wireshark' && !typing && currentPackets.length) {
+      if (event.key === 'ArrowDown' || event.key === 'j') {
+        event.preventDefault();
+        const next = Math.min(currentPackets.length - 1, selectedPacketIndex + 1);
+        selectWiresharkPacket(next);
+        return;
+      }
+      if (event.key === 'ArrowUp' || event.key === 'k') {
+        event.preventDefault();
+        const prev = Math.max(0, selectedPacketIndex - 1);
+        selectWiresharkPacket(prev);
+        return;
+      }
+    }
     if (event.key === 'Escape' && document.body.classList.contains('presenter-mode')) {
       event.preventDefault();
       togglePresentationMode(false);
@@ -633,6 +1327,11 @@ async function resetModel() {
     sessionLog = [];
     renderSession();
     clearTerminal();
+    currentPackets = [];
+    selectedPacketIndex = 0;
+    updateWiresharkBadge();
+    renderWiresharkTable();
+    setConsoleMode('terminal');
     restartQuiz();
     toast('LAN model reset to defaults.');
   } catch (error) {

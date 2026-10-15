@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
 import threading
+import time
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
 import executor
+import simulation_packets
 
 app = Flask(__name__)
 
@@ -134,28 +137,77 @@ def reset_state():
 def simulate_api():
     payload = request.get_json(silent=True) or {}
     scenario = str(payload.get("scenario", "")).lower()
-    stamp = datetime.now().strftime("%H:%M:%S")
     with STATE_LOCK:
         server_running = STATE["server_running"]
         dns_running = STATE["dns_running"]
         server_port = STATE["server_port"]
-    scenarios = {
-        "tcp": ("TCP connection setup", ["Client selects an ephemeral source port.", "SYN: client requests a connection.", "SYN-ACK: server acknowledges the request.", "ACK: connection is established."], ["SYN", "SYN-ACK", "ACK"]),
-        "udp": ("UDP datagram delivery", ["Application creates a datagram.", "UDP adds source and destination ports.", "Datagram is sent without a connection handshake.", "Delivery is not guaranteed by UDP itself."], ["Datagram created", "No handshake", "Best-effort delivery"]),
-        "http": ("HTTP request / response", ["DNS resolves server.local to 192.168.1.100.", f"Client opens a TCP connection to port {server_port}.", "Client sends GET / HTTP/1.1.", f"Server responds with {'200 OK' if server_running else 'connection refused'}."], ["DNS lookup", "TCP handshake", "GET /", "HTTP response"]),
-        "dns": ("DNS name resolution", ["Client asks the configured DNS service for server.local.", "DNS looks up the A record.", f"Response: {'192.168.1.100' if dns_running else 'SERVFAIL (service stopped)'}"], ["Query sent", "A record lookup", "Response returned"]),
-        "dhcp": ("DHCP address assignment", ["DISCOVER: client broadcasts for a DHCP server.", "OFFER: server proposes an address from the pool.", "REQUEST: client requests the offered address.", "ACK: server confirms the lease."], ["DHCP Discover", "DHCP Offer", "DHCP Request", "DHCP ACK"]),
-        "arp": ("ARP address resolution", ["PC1 checks its ARP cache for 192.168.1.11.", "No cached entry: ARP request is broadcast on the LAN.", "PC2 replies with its MAC address.", "PC1 caches the IPv4-to-MAC mapping."], ["Cache check", "ARP request", "ARP reply", "Cache updated"]),
-    }
-    if scenario not in scenarios:
+    data = simulation_packets.get_simulation_data(
+        scenario,
+        server_running=server_running,
+        dns_running=dns_running,
+        server_port=server_port,
+    )
+    if not data:
         return jsonify({"ok": False, "message": "Unknown simulation scenario."}), 400
-    title, lines, stages = scenarios[scenario]
-    if scenario == "http" and not server_running:
-        lines[-1] = "Server is stopped: the request fails before an HTTP response."
-    if scenario == "dns" and not dns_running:
-        lines[-1] = "DNS service is stopped: no A record response is returned."
-    events = [{"time": stamp, "title": stage, "detail": line, "kind": "error" if ((scenario == "http" and not server_running and i == len(lines) - 1) or (scenario == "dns" and not dns_running and i == len(lines) - 1)) else ("success" if i == len(lines) - 1 else "info")} for i, (stage, line) in enumerate(zip(stages, lines))]
-    return jsonify({"ok": not ((scenario == "http" and not server_running) or (scenario == "dns" and not dns_running)), "title": title, "lines": lines, "events": events, "output": title + "\n" + "\n".join(f"{i + 1}. {line}" for i, line in enumerate(lines))})
+    return jsonify(data)
+
+
+@app.post("/api/packet_action")
+def packet_action_api():
+    payload = request.get_json(silent=True) or {}
+    action = str(payload.get("action", "")).strip().lower()
+    params = payload.get("params", {})
+    with STATE_LOCK:
+        server_running = STATE["server_running"]
+        server_port = STATE["server_port"]
+        if "src_ip" not in params and "PC1" in STATE["hosts"]:
+            params["src_ip"] = STATE["hosts"]["PC1"]["ip"]
+        if "dst_ip" not in params and "Server" in STATE["hosts"]:
+            params["dst_ip"] = STATE["hosts"]["Server"]["ip"]
+        if "server_port" not in params:
+            params["server_port"] = server_port
+
+    pkt = simulation_packets.create_action_packet(
+        action,
+        params=params,
+        server_running=server_running,
+        server_port=server_port,
+    )
+    return jsonify({"ok": True, "action": action, "packet": pkt})
+
+
+@app.post("/api/probe_tcp")
+def probe_tcp():
+    payload = request.get_json(silent=True) or {}
+    target_host = str(payload.get("host", "127.0.0.1")).strip()
+    target_port = int(payload.get("port", 5000))
+    if not (1 <= target_port <= 65535):
+        return jsonify({"ok": False, "error": "Invalid port number."}), 400
+    if target_host not in ("127.0.0.1", "localhost", "1.1.1.1", "8.8.8.8"):
+        target_host = "127.0.0.1"
+
+    t0 = time.perf_counter()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(2.5)
+    try:
+        sock.connect((target_host, target_port))
+        rtt_ms = (time.perf_counter() - t0) * 1000
+        client_ip, client_port = sock.getsockname()
+        server_ip, server_port = sock.getpeername()
+        sock.close()
+        return jsonify({
+            "ok": True,
+            "host": target_host,
+            "port": target_port,
+            "client_ip": client_ip,
+            "client_port": client_port,
+            "server_ip": server_ip,
+            "server_port": server_port,
+            "rtt_ms": round(rtt_ms, 2),
+            "real_handshake": True,
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 
 if __name__ == "__main__":

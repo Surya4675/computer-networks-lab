@@ -132,6 +132,160 @@
           </md-tabs>
         </div>
         <div class="card protocol-detail" id="protocol-detail"></div>
+
+        <!-- REAL-TIME INTERACTIVE ACTION DECK -->
+        <div class="card interactive-action-deck" id="protocol-action-deck">
+          <div class="action-deck-header">
+            <div class="action-deck-title">
+              <span class="action-deck-badge"><md-icon>bolt</md-icon></span>
+              <div>
+                <h3 class="action-deck-h3">Real-Time Interactive Actions</h3>
+                <p class="action-deck-sub">Trigger live socket transitions, craft custom payloads, and inspect live packet captures in Wireshark.</p>
+              </div>
+            </div>
+            <div class="action-deck-socket-states">
+              <div class="socket-state-box">
+                <span class="socket-label">CLIENT (PC1)</span>
+                <span class="state-chip state-closed" id="sock-client-state">CLOSED</span>
+              </div>
+              <div class="socket-link-indicator" id="socket-link-indicator" title="Connection status">
+                <span class="link-line"></span>
+                <span class="link-badge" id="sock-link-status">DISCONNECTED</span>
+              </div>
+              <div class="socket-state-box">
+                <span class="socket-label">SERVER (PORT 80)</span>
+                <span class="state-chip state-listen" id="sock-server-state">LISTEN</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Protocol-specific Action Bars -->
+          <div class="action-deck-body">
+            <!-- TCP CONTROLS -->
+            <div class="proto-action-group" id="actions-tcp">
+              <div class="action-steps-row">
+                <span class="action-step-label">1. HANDSHAKE:</span>
+                <button type="button" class="act-btn act-btn-syn" id="act-send-syn" title="Send TCP SYN (PC1 -> Server)">
+                  <span class="act-step-num">1</span>
+                  <span>Send SYN</span>
+                </button>
+                <button type="button" class="act-btn act-btn-synack" id="act-send-synack" disabled title="Reply TCP SYN-ACK (Server -> PC1)">
+                  <span class="act-step-num">2</span>
+                  <span>Reply SYN-ACK</span>
+                </button>
+                <button type="button" class="act-btn act-btn-ack" id="act-send-ack" disabled title="Send TCP ACK (PC1 -> Server, establish socket)">
+                  <span class="act-step-num">3</span>
+                  <span>Send ACK</span>
+                </button>
+                <label class="auto-respond-toggle" title="Automatically trigger server response on client action">
+                  <input type="checkbox" id="chk-auto-respond" checked />
+                  <span>Auto-reply peer</span>
+                </label>
+              </div>
+
+              <div class="action-payload-row">
+                <span class="action-step-label">2. DATA:</span>
+                <div class="payload-input-wrap">
+                  <input type="text" id="tcp-payload-input" class="action-text-input" value="GET / HTTP/1.1" placeholder="Enter custom application payload…" spellcheck="false" />
+                  <button type="button" class="act-btn act-btn-data" id="act-send-data" disabled title="Send PSH+ACK carrying application payload">
+                    <md-icon>send</md-icon>
+                    <span>Send Data</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="action-faults-row">
+                <span class="action-step-label">3. CONTROLS:</span>
+                <div class="action-faults-buttons">
+                  <button type="button" class="act-btn act-btn-fin" id="act-send-fin" disabled title="Gracefully terminate TCP connection (FIN 4-way teardown)">
+                    <md-icon>stop_circle</md-icon>
+                    <span>Close (FIN)</span>
+                  </button>
+                  <button type="button" class="act-btn act-btn-rst" id="act-send-rst" title="Send TCP RST to immediately terminate connection">
+                    <md-icon>flash_on</md-icon>
+                    <span>Reset (RST)</span>
+                  </button>
+                  <button type="button" class="act-btn act-btn-loss" id="act-packet-loss" title="Simulate dropped packet and TCP retransmission timer expiration">
+                    <md-icon>report_problem</md-icon>
+                    <span>Loss & Retransmit</span>
+                  </button>
+                  <button type="button" class="act-btn act-btn-probe" id="act-real-probe" title="Execute real OS kernel TCP handshake on localhost:5000">
+                    <md-icon>language</md-icon>
+                    <span>Real Host Probe</span>
+                  </button>
+                  <button type="button" class="act-btn act-btn-reset" id="act-reset-flow" title="Reset socket states back to CLOSED / LISTEN">
+                    <md-icon>restart_alt</md-icon>
+                    <span>Reset</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- UDP CONTROLS (Hidden when not UDP) -->
+            <div class="proto-action-group" id="actions-udp" style="display: none;">
+              <div class="action-payload-row">
+                <span class="action-step-label">UDP DATAGRAM:</span>
+                <div class="payload-input-wrap">
+                  <input type="text" id="udp-payload-input" class="action-text-input" value="Syslog: NetLab status active" placeholder="Enter UDP payload…" spellcheck="false" />
+                  <button type="button" class="act-btn act-btn-data" id="act-send-udp">
+                    <md-icon>send</md-icon>
+                    <span>Send Datagram</span>
+                  </button>
+                  <button type="button" class="act-btn act-btn-syn" id="act-blast-udp">
+                    <md-icon>dynamic_feed</md-icon>
+                    <span>Blast 5 Packets</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- DNS CONTROLS (Hidden when not DNS) -->
+            <div class="proto-action-group" id="actions-dns" style="display: none;">
+              <div class="action-payload-row">
+                <span class="action-step-label">DNS RESOLVER:</span>
+                <div class="payload-input-wrap">
+                  <input type="text" id="dns-query-input" class="action-text-input" value="example.com" placeholder="Domain name (e.g. example.com)…" spellcheck="false" />
+                  <button type="button" class="act-btn act-btn-syn" id="act-dns-query">
+                    <md-icon>search</md-icon>
+                    <span>Send Query (A)</span>
+                  </button>
+                  <button type="button" class="act-btn act-btn-ack" id="act-dns-response">
+                    <md-icon>check_circle</md-icon>
+                    <span>Resolver Reply</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- DHCP CONTROLS (Hidden when not DHCP) -->
+            <div class="proto-action-group" id="actions-dhcp" style="display: none;">
+              <div class="action-steps-row">
+                <span class="action-step-label">D-O-R-A:</span>
+                <button type="button" class="act-btn act-btn-syn" id="act-dhcp-discover"><span>1. Discover</span></button>
+                <button type="button" class="act-btn act-btn-synack" id="act-dhcp-offer"><span>2. Offer</span></button>
+                <button type="button" class="act-btn act-btn-data" id="act-dhcp-request"><span>3. Request</span></button>
+                <button type="button" class="act-btn act-btn-ack" id="act-dhcp-ack"><span>4. ACK</span></button>
+              </div>
+            </div>
+
+            <!-- ARP CONTROLS (Hidden when not ARP) -->
+            <div class="proto-action-group" id="actions-arp" style="display: none;">
+              <div class="action-steps-row">
+                <span class="action-step-label">ARP RESOLUTION:</span>
+                <button type="button" class="act-btn act-btn-syn" id="act-arp-request">
+                  <md-icon>campaign</md-icon>
+                  <span>1. Broadcast Request</span>
+                </button>
+                <button type="button" class="act-btn act-btn-ack" id="act-arp-reply">
+                  <md-icon>reply</md-icon>
+                  <span>2. Unicast Reply</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         <div class="card sequence-panel">
           <div class="sequence-head">
             <div>
@@ -261,13 +415,112 @@
 
         <div class="terminal" id="terminal-window">
           <div class="terminal-head">
-            <span class="terminal-dots"><i></i><i></i><i></i></span>
-            <small>netlab · real diagnostics</small>
-            <md-text-button id="clear-terminal"><md-icon slot="icon">backspace</md-icon>Clear</md-text-button>
+            <div class="terminal-head-left">
+              <span class="terminal-dots"><i></i><i></i><i></i></span>
+              <div class="console-mode-tabs" role="tablist" aria-label="Console display mode">
+                <button class="console-tab-btn active" id="tab-btn-terminal" type="button" role="tab" aria-selected="true" title="Real command prompt">
+                  <md-icon>terminal</md-icon>
+                  <span>Terminal</span>
+                </button>
+                <button class="console-tab-btn" id="tab-btn-wireshark" type="button" role="tab" aria-selected="false" title="Interactive Wireshark packet capture inspector">
+                  <md-icon>waves</md-icon>
+                  <span>Wireshark</span>
+                  <span class="wireshark-badge" id="wireshark-badge">0</span>
+                </button>
+              </div>
+            </div>
+            <div class="terminal-head-actions">
+              <button class="terminal-action-btn" id="btn-wireshark-replay" type="button" title="Replay packet capture" style="display: none;">
+                <md-icon>replay</md-icon>
+                <span>Replay</span>
+              </button>
+              <button class="terminal-action-btn" id="clear-terminal" type="button" title="Clear console output">
+                <md-icon>backspace</md-icon>
+                <span>Clear</span>
+              </button>
+            </div>
           </div>
           <pre class="terminal-output" id="terminal-output" aria-live="polite">NETLAB REAL CONSOLE
 Type “help” to list the allow-listed commands.
 Commands execute on the host that runs this application.</pre>
+
+          <div class="wireshark-window" id="wireshark-window" style="display: none;">
+            <div class="ws-quick-toolbar" id="ws-quick-toolbar" aria-label="Quick packet injection actions">
+              <span class="ws-quick-label"><md-icon>bolt</md-icon> Live Inject:</span>
+              <button type="button" class="ws-quick-btn ws-q-syn" id="ws-quick-syn" title="Inject TCP SYN">+ SYN</button>
+              <button type="button" class="ws-quick-btn ws-q-synack" id="ws-quick-synack" title="Inject TCP SYN-ACK">+ SYN-ACK</button>
+              <button type="button" class="ws-quick-btn ws-q-ack" id="ws-quick-ack" title="Inject TCP ACK">+ ACK</button>
+              <button type="button" class="ws-quick-btn ws-q-data" id="ws-quick-data" title="Inject Application Payload">+ Data</button>
+              <button type="button" class="ws-quick-btn ws-q-fin" id="ws-quick-fin" title="Inject FIN Teardown">+ FIN</button>
+              <button type="button" class="ws-quick-btn ws-q-rst" id="ws-quick-rst" title="Inject TCP Reset">+ RST</button>
+              <button type="button" class="ws-quick-btn ws-q-loss" id="ws-quick-loss" title="Simulate Packet Loss / Retransmit">+ Loss</button>
+              <button type="button" class="ws-quick-btn ws-q-probe" id="ws-quick-probe" title="Real Kernel TCP Handshake Probe">🌐 OS Probe</button>
+            </div>
+
+            <div class="ws-filter-bar">
+              <div class="ws-filter-input-wrap">
+                <md-icon class="ws-filter-icon">filter_list</md-icon>
+                <input type="text" id="ws-filter-input" placeholder="Display filter: tcp, tcp.flags.syn==1, udp, etc." spellcheck="false" autocomplete="off" />
+              </div>
+              <button type="button" class="ws-btn ws-btn-apply" id="ws-filter-apply">Apply</button>
+              <button type="button" class="ws-btn ws-btn-clear" id="ws-filter-clear">Clear</button>
+            </div>
+
+            <div class="ws-filter-chips" id="ws-filter-chips"></div>
+
+            <div class="ws-capture-status" id="ws-capture-status" style="display: none;">
+              <span class="ws-capture-pulse"></span>
+              <span id="ws-capture-text">Capturing packets…</span>
+            </div>
+
+            <div class="ws-packet-list-wrap">
+              <table class="ws-packet-table" id="ws-packet-table">
+                <thead>
+                  <tr>
+                    <th class="ws-col-no">No.</th>
+                    <th class="ws-col-time">Time</th>
+                    <th class="ws-col-src">Source</th>
+                    <th class="ws-col-dst">Destination</th>
+                    <th class="ws-col-proto">Protocol</th>
+                    <th class="ws-col-len">Length</th>
+                    <th class="ws-col-info">Info</th>
+                  </tr>
+                </thead>
+                <tbody id="ws-packet-tbody">
+                  <tr class="ws-empty-row"><td colspan="7">No packet capture yet. Click "Run model sequence" in Protocols or type "model tcp".</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="ws-inspect-panel">
+              <div class="ws-inspect-head">
+                <div class="ws-inspect-tabs" role="tablist">
+                  <button type="button" class="ws-inspect-tab active" id="ws-tab-details" role="tab" aria-selected="true">
+                    <md-icon>account_tree</md-icon> Details
+                  </button>
+                  <button type="button" class="ws-inspect-tab" id="ws-tab-hex" role="tab" aria-selected="false">
+                    <md-icon>data_object</md-icon> Bytes (Hex)
+                  </button>
+                </div>
+                <span class="ws-selected-summary" id="ws-selected-summary">Select packet</span>
+              </div>
+
+              <div class="ws-details-view" id="ws-details-view">
+                <div class="ws-tree" id="ws-tree">
+                  <p class="ws-empty-hint">Click on any packet row to inspect headers &amp; flags.</p>
+                </div>
+              </div>
+
+              <div class="ws-hex-view" id="ws-hex-view" style="display: none;">
+                <pre class="ws-hex-dump" id="ws-hex-dump">No packet selected.</pre>
+              </div>
+            </div>
+
+            <div class="ws-status-bar">
+              <span id="ws-status-count">Packets: 0 · Displayed: 0 (100%)</span>
+              <span id="ws-status-selection">No selection</span>
+            </div>
+          </div>
         </div>
 
         <div class="console-form">

@@ -1,8 +1,7 @@
 services:
   - type: web
-    name: computer-networks-lab
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    name: cnlab
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     autoDeploy: true

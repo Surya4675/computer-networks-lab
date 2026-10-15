@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: cnlab
+    name: computer-networks-lab
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
